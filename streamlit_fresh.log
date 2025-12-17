@@ -1,0 +1,39 @@
+
+Collecting usage statistics. To deactivate, set browser.gatherUsageStats to false.
+
+
+  You can now view your Streamlit app in your browser.
+
+  Local URL: http://localhost:8501
+  Network URL: http://10.0.0.134:8501
+  External URL: http://172.210.53.192:8501
+
+2025-12-17 03:33:53.631 Uncaught app execution
+Traceback (most recent call last):
+  File "/home/vscode/.local/lib/python3.11/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+             ^^^^^^
+  File "/home/vscode/.local/lib/python3.11/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 671, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspaces/smartbi/smartbi_bundle.py", line 1639, in <module>
+    main()
+  File "/workspaces/smartbi/smartbi_bundle.py", line 1605, in main
+    page = st.sidebar.radio(
+           ^^^^^^^^^^^^^^^^^
+  File "/home/vscode/.local/lib/python3.11/site-packages/streamlit/runtime/metrics_util.py", line 531, in wrapped_func
+    result = non_optional_func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vscode/.local/lib/python3.11/site-packages/streamlit/elements/widgets/radio.py", line 318, in radio
+    return self._radio(
+           ^^^^^^^^^^^^
+  File "/home/vscode/.local/lib/python3.11/site-packages/streamlit/elements/widgets/radio.py", line 371, in _radio
+    element_id = compute_and_register_element_id(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vscode/.local/lib/python3.11/site-packages/streamlit/elements/lib/utils.py", line 265, in compute_and_register_element_id
+    _register_element_id(ctx, element_type, element_id)
+  File "/home/vscode/.local/lib/python3.11/site-packages/streamlit/elements/lib/utils.py", line 150, in _register_element_id
+    raise StreamlitDuplicateElementId(element_type)
+streamlit.errors.StreamlitDuplicateElementId: There are multiple `radio` elements with the same auto-generated ID. When this element is created, it is assigned an internal ID based on the element type and provided parameters. Multiple elements with the same type and parameters will cause this error.
+
+To fix this error, please pass a unique `key` argument to the `radio` element.

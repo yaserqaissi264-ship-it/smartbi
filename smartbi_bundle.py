@@ -273,6 +273,253 @@ class DataCleaner:
 
 
 # =============================================================================
+# FEATURE EXTRACTION MODULE
+# =============================================================================
+
+# =============================================================================
+# DATA PROFILING & ANALYSIS MODULE
+# =============================================================================
+
+class DataProfiler:
+    """Comprehensive data profiling and quality analysis"""
+    
+    @staticmethod
+    def generate_profile(df):
+        """Generate comprehensive data profile"""
+        profile = {
+            'shape': {'rows': len(df), 'columns': len(df.columns)},
+            'columns': list(df.columns),
+            'dtypes': df.dtypes.astype(str).to_dict(),
+            'memory_usage': df.memory_usage(deep=True).sum() / 1024**2,  # MB
+        }
+        return profile
+    
+    @staticmethod
+    def analyze_missing_values(df):
+        """Detailed missing value analysis"""
+        missing = pd.DataFrame({
+            'Column': df.columns,
+            'Missing_Count': df.isnull().sum(),
+            'Missing_Percentage': (df.isnull().sum() / len(df) * 100).round(2),
+            'Data_Type': df.dtypes
+        })
+        missing = missing[missing['Missing_Count'] > 0].sort_values('Missing_Percentage', ascending=False)
+        return missing
+    
+    @staticmethod
+    def detect_duplicates(df):
+        """Detect duplicate rows"""
+        total_duplicates = df.duplicated().sum()
+        duplicate_cols = []
+        for col in df.columns:
+            dup_count = df[col].duplicated().sum()
+            if dup_count > 0:
+                duplicate_cols.append({'Column': col, 'Duplicates': dup_count})
+        
+        return {'total_duplicates': total_duplicates, 'by_column': duplicate_cols}
+    
+    @staticmethod
+    def detect_data_types(df):
+        """Detect and categorize data types"""
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
+        datetime_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
+        
+        return {
+            'numeric': numeric_cols,
+            'categorical': categorical_cols,
+            'datetime': datetime_cols
+        }
+    
+    @staticmethod
+    def identify_quality_issues(df):
+        """Identify data quality issues"""
+        issues = []
+        
+        # Check for high missing values
+        missing = df.isnull().sum()
+        for col, count in missing.items():
+            pct = (count / len(df)) * 100
+            if pct > 50:
+                issues.append(f"⚠️ Column '{col}' has {pct:.1f}% missing values")
+        
+        # Check for constant columns
+        for col in df.columns:
+            if df[col].nunique() == 1:
+                issues.append(f"⚠️ Column '{col}' has only one unique value")
+        
+        # Check for high cardinality categorical
+        cat_cols = df.select_dtypes(include=['object']).columns
+        for col in cat_cols:
+            if df[col].nunique() > len(df) * 0.5:
+                issues.append(f"⚠️ Column '{col}' has very high cardinality ({df[col].nunique()} unique values)")
+        
+        # Check for potential outliers in numeric columns
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            Q1 = df[col].quantile(0.25)
+            Q3 = df[col].quantile(0.75)
+            IQR = Q3 - Q1
+            outliers = len(df[(df[col] < Q1 - 1.5*IQR) | (df[col] > Q3 + 1.5*IQR)])
+            if outliers > 0:
+                pct = (outliers / len(df)) * 100
+                if pct > 5:
+                    issues.append(f"📊 Column '{col}' contains {pct:.1f}% potential outliers")
+        
+        return issues if issues else ["✅ No major data quality issues detected"]
+    
+    @staticmethod
+    def get_statistical_summary(df):
+        """Generate statistical summary"""
+        numeric_df = df.select_dtypes(include=[np.number])
+        return numeric_df.describe().T
+
+
+class InsightGenerator:
+    """Generate automated insights and recommendations"""
+    
+    @staticmethod
+    def analyze_features(df):
+        """Analyze feature importance and characteristics"""
+        insights = []
+        
+        # Numeric features analysis
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            variance = df[col].var()
+            skewness = df[col].skew()
+            
+            if abs(skewness) > 1:
+                insights.append(f"📈 {col}: Highly skewed distribution (skewness: {skewness:.2f})")
+            
+            if variance > df[col].mean() ** 2:
+                insights.append(f"📊 {col}: High variability relative to mean")
+        
+        # Categorical features analysis
+        cat_cols = df.select_dtypes(include=['object']).columns
+        for col in cat_cols:
+            top_value_freq = df[col].value_counts().iloc[0] / len(df) if len(df[col].value_counts()) > 0 else 0
+            if top_value_freq > 0.8:
+                insights.append(f"🏷️ {col}: Dominated by one category ({top_value_freq*100:.1f}%)")
+            else:
+                insights.append(f"🏷️ {col}: {df[col].nunique()} distinct categories, well-distributed")
+        
+        return insights if insights else ["✅ Features appear well-balanced"]
+    
+    @staticmethod
+    def analyze_correlations(df):
+        """Analyze feature correlations"""
+        insights = []
+        numeric_df = df.select_dtypes(include=[np.number])
+        
+        if len(numeric_df.columns) < 2:
+            return ["ℹ️ Need at least 2 numeric features for correlation analysis"]
+        
+        corr = numeric_df.corr()
+        
+        # Find strong correlations
+        for i in range(len(corr.columns)):
+            for j in range(i+1, len(corr.columns)):
+                corr_val = corr.iloc[i, j]
+                if abs(corr_val) > 0.7:
+                    direction = "positive" if corr_val > 0 else "negative"
+                    insights.append(f"🔗 Strong {direction} correlation ({corr_val:.2f}) between {corr.columns[i]} and {corr.columns[j]}")
+        
+        return insights if insights else ["ℹ️ No strong correlations detected between features"]
+    
+    @staticmethod
+    def generate_recommendations(df, issues):
+        """Generate actionable recommendations"""
+        recommendations = []
+        
+        # Missing value recommendations
+        missing = df.isnull().sum()
+        if missing.sum() > 0:
+            recommendations.append("🔧 Data Cleaning: Use Data Cleaning page to handle missing values (Mean/Median/KNN imputation)")
+        
+        # Feature engineering recommendations
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) > 1:
+            recommendations.append("⚙️ Feature Engineering: Create interaction features or polynomial features for better model performance")
+        
+        # Forecasting recommendation
+        datetime_cols = df.select_dtypes(include=['datetime64']).columns
+        numeric_with_date = [col for col in numeric_cols if 'date' in str(col).lower()]
+        if len(datetime_cols) > 0 or len(numeric_with_date) > 0:
+            recommendations.append("🔮 Time Series: Your data appears suitable for forecasting with the Forecasting page")
+        
+        # Data quality recommendations
+        if len(issues) > 2:
+            recommendations.append("📋 Quality Check: Consider reviewing and improving data quality before analysis")
+        
+        return recommendations if recommendations else ["✅ Data looks ready for analysis!"]
+
+
+class FeatureExtractor:
+    """Advanced feature extraction and engineering"""
+    
+    @staticmethod
+    def create_polynomial_features(df, columns, degree=2):
+        """Create polynomial features"""
+        df_features = df.copy()
+        numeric_cols = [c for c in columns if c in df.select_dtypes(include=[np.number]).columns]
+        
+        for col in numeric_cols:
+            for d in range(2, degree + 1):
+                df_features[f'{col}_power_{d}'] = df_features[col] ** d
+        
+        return df_features
+    
+    @staticmethod
+    def create_interaction_features(df, columns):
+        """Create interaction features between columns"""
+        df_features = df.copy()
+        numeric_cols = [c for c in columns if c in df.select_dtypes(include=[np.number]).columns]
+        
+        for i in range(len(numeric_cols)):
+            for j in range(i + 1, len(numeric_cols)):
+                col1, col2 = numeric_cols[i], numeric_cols[j]
+                df_features[f'{col1}_x_{col2}'] = df_features[col1] * df_features[col2]
+        
+        return df_features
+    
+    @staticmethod
+    def create_statistical_features(df, columns, window=7):
+        """Create rolling statistical features"""
+        df_features = df.copy()
+        numeric_cols = [c for c in columns if c in df.select_dtypes(include=[np.number]).columns]
+        
+        for col in numeric_cols:
+            df_features[f'{col}_rolling_mean_{window}'] = df_features[col].rolling(window=window, min_periods=1).mean()
+            df_features[f'{col}_rolling_std_{window}'] = df_features[col].rolling(window=window, min_periods=1).std()
+            df_features[f'{col}_lag_1'] = df_features[col].shift(1)
+            df_features[f'{col}_lag_3'] = df_features[col].shift(3)
+        
+        return df_features
+    
+    @staticmethod
+    def create_categorical_features(df, column):
+        """One-hot encode categorical features"""
+        df_features = df.copy()
+        if column in df.columns:
+            encoded = pd.get_dummies(df_features[column], prefix=column, drop_first=True)
+            df_features = pd.concat([df_features, encoded], axis=1)
+        
+        return df_features
+    
+    @staticmethod
+    def feature_importance_analysis(df, target_col):
+        """Analyze feature importance using correlation"""
+        numeric_df = df.select_dtypes(include=[np.number])
+        
+        if target_col not in numeric_df.columns:
+            return None
+        
+        correlations = numeric_df.corr()[target_col].abs().sort_values(ascending=False)
+        return correlations
+
+
+# =============================================================================
 # TIME SERIES FORECASTING MODULE
 # =============================================================================
 
@@ -512,8 +759,17 @@ def init_session_state():
         st.session_state.chat_history = []
     
     if 'ai_assistant' not in st.session_state:
-        api_key = st.secrets.get("OPENAI_API_KEY", None) if hasattr(st, 'secrets') else None
+        try:
+            api_key = st.secrets.get("OPENAI_API_KEY", None)
+        except:
+            api_key = None
         st.session_state.ai_assistant = AIAssistant(api_key)
+    
+    if 'engineered_df' not in st.session_state:
+        st.session_state.engineered_df = None
+    
+    if 'profile_data' not in st.session_state:
+        st.session_state.profile_data = None
 
 
 def home_page():
@@ -526,24 +782,36 @@ def home_page():
     
     #### 🚀 Key Features:
     
-    1. **📊 Data Cleaning & Preparation**
+    1. **� Data Analysis & Insights**
+       - Comprehensive data profiling
+       - Automatic quality issue detection
+       - Feature importance analysis
+       - Correlation and relationship insights
+    
+    2. **🧹 Data Cleaning & Preparation**
        - Handle missing values with advanced imputation methods
        - Remove duplicates and outliers
-       - Data quality analysis
+       - Data quality analysis and before/after comparison
     
-    2. **📈 Dynamic Dashboards**
+    3. **🔧 Feature Engineering**
+       - Polynomial and interaction features
+       - Statistical rolling features
+       - Categorical encoding
+       - Feature importance analysis
+    
+    4. **📈 Dynamic Dashboards**
        - Interactive visualizations
        - Correlation analysis
        - Distribution plots
        - Custom charts
     
-    3. **🔮 Time Series Forecasting**
+    5. **🔮 Time Series Forecasting**
        - Prophet-based forecasting
        - Seasonality detection
        - Confidence intervals
        - Long-term predictions
     
-    4. **🤖 AI Assistant**
+    6. **🤖 AI Assistant**
        - Conversational interface
        - Data insights
        - Analysis recommendations
@@ -552,10 +820,12 @@ def home_page():
     #### 📋 Quick Start:
     
     1. **Upload Data**: Go to "Data Upload" and load your CSV file
-    2. **Clean Data**: Use "Data Cleaning" to prepare your data
-    3. **Visualize**: Create dashboards with interactive charts
-    4. **Forecast**: Predict future trends with time series analysis
-    5. **Ask AI**: Get insights from our AI assistant
+    2. **Analyze**: Use "Data Analysis" to understand your dataset
+    3. **Clean Data**: Use "Data Cleaning" to prepare your data
+    4. **Engineer Features**: Extract and create new features
+    5. **Visualize**: Create dashboards with interactive charts
+    6. **Forecast**: Predict future trends with time series analysis
+    7. **Ask AI**: Get insights from our AI assistant
     """)
     
     # System status
@@ -903,6 +1173,337 @@ def forecasting_page():
                 st.error(f"Error generating forecast: {str(e)}")
 
 
+def data_analysis_page():
+    """Comprehensive data analysis and profiling"""
+    st.title("📊 Data Analysis & Insights")
+    
+    if st.session_state.current_df is None:
+        st.warning("⚠️ No data loaded. Please upload data first.")
+        return
+    
+    df = st.session_state.current_df
+    
+    # Generate analysis
+    profile = DataProfiler.generate_profile(df)
+    data_types = DataProfiler.detect_data_types(df)
+    missing_analysis = DataProfiler.analyze_missing_values(df)
+    quality_issues = DataProfiler.identify_quality_issues(df)
+    feature_insights = InsightGenerator.analyze_features(df)
+    correlation_insights = InsightGenerator.analyze_correlations(df)
+    recommendations = InsightGenerator.generate_recommendations(df, quality_issues)
+    
+    # =========================================================================
+    # SECTION 1: DATA UNDERSTANDING
+    # =========================================================================
+    st.header("1️⃣ Data Understanding & Profiling")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("📈 Rows", f"{profile['shape']['rows']:,}")
+    col2.metric("📊 Columns", profile['shape']['columns'])
+    col3.metric("💾 Memory", f"{profile['memory_usage']:.2f} MB")
+    col4.metric("🚨 Issues Found", len(quality_issues) if isinstance(quality_issues, list) else 0)
+    
+    st.subheader("Data Types Distribution")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.info(f"📊 Numeric: {len(data_types['numeric'])} columns")
+    with col2:
+        st.info(f"🏷️ Categorical: {len(data_types['categorical'])} columns")
+    with col3:
+        st.info(f"📅 DateTime: {len(data_types['datetime'])} columns")
+    
+    # Detailed column information
+    st.subheader("Column Details")
+    col_info = pd.DataFrame({
+        'Column': df.columns,
+        'Type': df.dtypes.astype(str),
+        'Non-Null': df.count(),
+        'Null': df.isnull().sum(),
+        'Unique Values': df.nunique()
+    })
+    st.dataframe(col_info, use_container_width=True)
+    
+    # =========================================================================
+    # SECTION 2: DATA QUALITY & ISSUES
+    # =========================================================================
+    st.header("2️⃣ Data Quality Report")
+    
+    # Missing values
+    st.subheader("Missing Values Analysis")
+    if len(missing_analysis) > 0:
+        st.dataframe(missing_analysis, use_container_width=True)
+        st.warning(f"Found missing values in {len(missing_analysis)} column(s)")
+    else:
+        st.success("✅ No missing values detected!")
+    
+    # Duplicates
+    st.subheader("Duplicate Analysis")
+    dup_info = DataProfiler.detect_duplicates(df)
+    col1, col2 = st.columns(2)
+    col1.metric("Total Duplicated Rows", dup_info['total_duplicates'])
+    col2.metric("Columns with Duplicates", len(dup_info['by_column']))
+    
+    if dup_info['by_column']:
+        st.dataframe(pd.DataFrame(dup_info['by_column']), use_container_width=True)
+    
+    # Quality issues
+    st.subheader("Data Quality Issues")
+    for issue in quality_issues:
+        st.write(issue)
+    
+    # =========================================================================
+    # SECTION 3: FEATURE ANALYSIS
+    # =========================================================================
+    st.header("3️⃣ Feature Analysis")
+    
+    st.subheader("Statistical Summary")
+    summary = DataProfiler.get_statistical_summary(df)
+    st.dataframe(summary, use_container_width=True)
+    
+    st.subheader("Feature Insights")
+    for insight in feature_insights:
+        st.write(insight)
+    
+    # =========================================================================
+    # SECTION 4: CORRELATION ANALYSIS
+    # =========================================================================
+    st.header("4️⃣ Correlation & Relationships")
+    
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    if len(numeric_cols) >= 2:
+        st.subheader("Correlation Analysis")
+        corr_matrix = df[numeric_cols].corr()
+        
+        fig = px.imshow(
+            corr_matrix,
+            text_auto=True,
+            aspect="auto",
+            color_continuous_scale='RdBu_r',
+            title="Feature Correlation Matrix",
+            labels=dict(color="Correlation")
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Correlation insights
+        st.subheader("Relationship Insights")
+        for insight in correlation_insights:
+            st.write(insight)
+        
+        st.info("⚠️ **Important**: Correlation does not imply causation. Strong correlations may be coincidental or due to other factors.")
+    else:
+        st.info("Need at least 2 numeric columns for correlation analysis")
+    
+    # =========================================================================
+    # SECTION 5: DISTRIBUTION ANALYSIS
+    # =========================================================================
+    st.header("5️⃣ Distribution Analysis")
+    
+    if numeric_cols:
+        st.subheader("Numeric Feature Distributions")
+        selected_col = st.selectbox("Select column to analyze", numeric_cols)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            fig = px.histogram(
+                df,
+                x=selected_col,
+                title=f"Distribution of {selected_col}",
+                marginal="box",
+                nbins=30
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            stats = df[selected_col].describe()
+            st.metric("Mean", f"{stats['mean']:.2f}")
+            st.metric("Median", f"{df[selected_col].median():.2f}")
+            st.metric("Std Dev", f"{stats['std']:.2f}")
+            st.metric("Skewness", f"{df[selected_col].skew():.2f}")
+    
+    # Categorical distributions
+    cat_cols = df.select_dtypes(include=['object']).columns.tolist()
+    if cat_cols:
+        st.subheader("Categorical Feature Distributions")
+        selected_cat = st.selectbox("Select categorical column", cat_cols)
+        
+        value_counts = df[selected_cat].value_counts().head(20)
+        fig = px.bar(
+            x=value_counts.values,
+            y=value_counts.index,
+            orientation='h',
+            title=f"Top Values in {selected_cat}",
+            labels={'x': 'Count', 'y': 'Value'}
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # =========================================================================
+    # SECTION 6: RECOMMENDATIONS
+    # =========================================================================
+    st.header("6️⃣ Automated Recommendations")
+    
+    for i, rec in enumerate(recommendations, 1):
+        st.write(f"{i}. {rec}")
+    
+    # =========================================================================
+    # SECTION 7: CLEANING REPORT (if data has been cleaned)
+    # =========================================================================
+    if st.session_state.cleaned_df is not None:
+        st.header("7️⃣ Before & After Cleaning Comparison")
+        
+        original = st.session_state.current_df
+        cleaned = st.session_state.cleaned_df
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Original Data")
+            st.write(f"Rows: {len(original)}")
+            st.write(f"Missing values: {original.isnull().sum().sum()}")
+            st.write(f"Duplicates: {original.duplicated().sum()}")
+        
+        with col2:
+            st.subheader("After Cleaning")
+            st.write(f"Rows: {len(cleaned)}")
+            st.write(f"Missing values: {cleaned.isnull().sum().sum()}")
+            st.write(f"Duplicates: {cleaned.duplicated().sum()}")
+
+
+def feature_engineering_page():
+    """Feature extraction and engineering"""
+    st.title("🔧 Feature Engineering")
+    
+    if st.session_state.current_df is None:
+        st.warning("⚠️ No data loaded. Please upload data first.")
+        return
+    
+    df = st.session_state.current_df.copy()
+    
+    # Feature engineering options
+    st.subheader("Feature Engineering Tools")
+    
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Polynomial", "Interactions", "Statistical", "Categorical", "Importance"])
+    
+    with tab1:
+        st.subheader("Polynomial Features")
+        st.write("Create polynomial features (x², x³, etc.) to capture non-linear relationships.")
+        
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        selected_cols = st.multiselect("Select columns for polynomial features", numeric_cols, default=numeric_cols[:2] if numeric_cols else [])
+        degree = st.slider("Polynomial degree", 2, 4, 2)
+        
+        if st.button("🔧 Create Polynomial Features"):
+            with st.spinner("Creating polynomial features..."):
+                engineered_df = FeatureExtractor.create_polynomial_features(df, selected_cols, degree=degree)
+                st.session_state.engineered_df = engineered_df
+                st.success(f"✅ Created {len(engineered_df.columns) - len(df.columns)} new polynomial features!")
+                st.dataframe(engineered_df.head())
+    
+    with tab2:
+        st.subheader("Interaction Features")
+        st.write("Create interaction features (x*y) to capture relationships between features.")
+        
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        selected_cols = st.multiselect("Select columns for interactions", numeric_cols, key="interaction_cols", default=numeric_cols[:2] if numeric_cols else [])
+        
+        if st.button("🔧 Create Interaction Features"):
+            with st.spinner("Creating interaction features..."):
+                engineered_df = FeatureExtractor.create_interaction_features(df, selected_cols)
+                st.session_state.engineered_df = engineered_df
+                new_features = len(engineered_df.columns) - len(df.columns)
+                st.success(f"✅ Created {new_features} new interaction features!")
+                st.dataframe(engineered_df.head())
+    
+    with tab3:
+        st.subheader("Statistical Rolling Features")
+        st.write("Create rolling mean, std, and lag features for time series analysis.")
+        
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        selected_cols = st.multiselect("Select columns for statistical features", numeric_cols, key="stat_cols", default=numeric_cols[:1] if numeric_cols else [])
+        window = st.slider("Rolling window size", 3, 30, 7)
+        
+        if st.button("🔧 Create Statistical Features"):
+            with st.spinner("Creating statistical features..."):
+                engineered_df = FeatureExtractor.create_statistical_features(df, selected_cols, window=window)
+                st.session_state.engineered_df = engineered_df
+                new_features = len(engineered_df.columns) - len(df.columns)
+                st.success(f"✅ Created {new_features} new statistical features!")
+                st.dataframe(engineered_df.head())
+    
+    with tab4:
+        st.subheader("Categorical Encoding")
+        st.write("One-hot encode categorical variables for machine learning.")
+        
+        cat_cols = df.select_dtypes(include=['object']).columns.tolist()
+        if cat_cols:
+            selected_col = st.selectbox("Select categorical column", cat_cols)
+            
+            if st.button("🔧 One-Hot Encode"):
+                with st.spinner("Encoding categorical features..."):
+                    engineered_df = FeatureExtractor.create_categorical_features(df, selected_col)
+                    st.session_state.engineered_df = engineered_df
+                    new_features = len(engineered_df.columns) - len(df.columns)
+                    st.success(f"✅ Created {new_features} new encoded features!")
+                    st.dataframe(engineered_df.head())
+        else:
+            st.info("No categorical columns found in the dataset.")
+    
+    with tab5:
+        st.subheader("Feature Importance Analysis")
+        st.write("Analyze which features are most correlated with a target variable.")
+        
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        if numeric_cols:
+            target_col = st.selectbox("Select target column", numeric_cols)
+            
+            if st.button("📊 Analyze Feature Importance"):
+                importance = FeatureExtractor.feature_importance_analysis(df, target_col)
+                if importance is not None:
+                    st.success("✅ Feature importance calculated!")
+                    
+                    # Display as dataframe
+                    importance_df = pd.DataFrame({
+                        'Feature': importance.index,
+                        'Correlation_Strength': importance.values
+                    })
+                    st.dataframe(importance_df)
+                    
+                    # Visualize
+                    fig = px.bar(
+                        importance_df,
+                        x='Correlation_Strength',
+                        y='Feature',
+                        orientation='h',
+                        title=f'Feature Importance vs {target_col}'
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No numeric columns found for importance analysis.")
+    
+    # Apply engineered features
+    if st.session_state.engineered_df is not None:
+        st.markdown("---")
+        st.subheader("Apply Engineered Features")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("✅ Use Engineered Data as Current Dataset"):
+                st.session_state.current_df = st.session_state.engineered_df
+                st.session_state.engineered_df = None
+                st.success("✅ Engineered features applied!")
+                st.rerun()
+        
+        with col2:
+            csv = st.session_state.engineered_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Engineered Dataset",
+                data=csv,
+                file_name="engineered_features.csv",
+                mime="text/csv"
+            )
+
+
 def ai_assistant_page():
     """Conversational AI assistant"""
     st.title("🤖 AI Assistant")
@@ -1003,8 +1604,8 @@ def main():
     
     page = st.sidebar.radio(
         "Navigation",
-        ["🏠 Home", "📤 Data Upload", "📊 Data Overview", "🧹 Data Cleaning", 
-         "📈 Dashboard", "🔮 Forecasting", "🤖 AI Assistant"]
+        ["🏠 Home", "📤 Data Upload", "📊 Data Overview", "🔬 Data Analysis", "🧹 Data Cleaning", 
+         "🔧 Feature Engineering", "📈 Dashboard", "🔮 Forecasting", "🤖 AI Assistant"]
     )
     
     # Page routing
@@ -1014,8 +1615,12 @@ def main():
         data_upload_page()
     elif page == "📊 Data Overview":
         data_overview_page()
+    elif page == "🔬 Data Analysis":
+        data_analysis_page()
     elif page == "🧹 Data Cleaning":
         data_cleaning_page()
+    elif page == "🔧 Feature Engineering":
+        feature_engineering_page()
     elif page == "📈 Dashboard":
         dashboard_page()
     elif page == "🔮 Forecasting":
@@ -1030,4 +1635,5 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
     main()
