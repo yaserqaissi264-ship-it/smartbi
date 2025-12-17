@@ -1605,7 +1605,8 @@ def main():
     page = st.sidebar.radio(
         "Navigation",
         ["🏠 Home", "📤 Data Upload", "📊 Data Overview", "🔬 Data Analysis", "🧹 Data Cleaning", 
-         "🔧 Feature Engineering", "📈 Dashboard", "🔮 Forecasting", "🤖 AI Assistant"]
+         "🔧 Feature Engineering", "📈 Dashboard", "🔮 Forecasting", "🤖 AI Assistant"],
+        key="main_nav"
     )
     
     # Page routing
