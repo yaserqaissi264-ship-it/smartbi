@@ -1038,13 +1038,24 @@ def dashboard_page():
     # Chart type selector
     chart_type = st.selectbox(
         "Select Chart Type",
-        ["Correlation Matrix", "Distribution", "Time Series", "Scatter Plot", "Bar Chart"]
+        ["Correlation Matrix", "Distribution", "Box Plot", "Violin Plot", "Time Series", 
+         "Scatter Plot", "Bar Chart", "Histogram", "Pie Chart", "Heatmap", "Sunburst (Categorical)"]
     )
+    
+    # Common chart styling
+    chart_config = {"displayModeBar": True, "displaylogo": False}
     
     if chart_type == "Correlation Matrix":
         fig = Visualizer.plot_correlation_matrix(df)
         if fig:
-            st.plotly_chart(fig, use_container_width=True)
+            fig.update_layout(
+                template="plotly_white",
+                height=600,
+                font=dict(size=11),
+                title_font_size=14,
+                coloraxis_colorbar=dict(title="Correlation")
+            )
+            st.plotly_chart(fig, use_container_width=True, config=chart_config)
         else:
             st.warning("Need at least 2 numeric columns for correlation matrix")
     
@@ -1053,7 +1064,65 @@ def dashboard_page():
         if numeric_cols:
             column = st.selectbox("Select Column", numeric_cols)
             fig = Visualizer.plot_distribution(df, column)
-            st.plotly_chart(fig, use_container_width=True)
+            fig.update_layout(
+                template="plotly_white",
+                height=500,
+                hovermode="x unified"
+            )
+            st.plotly_chart(fig, use_container_width=True, config=chart_config)
+        else:
+            st.warning("No numeric columns found")
+    
+    elif chart_type == "Box Plot":
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        cat_cols = df.select_dtypes(include=['object']).columns.tolist()
+        
+        if numeric_cols:
+            col1, col2 = st.columns(2)
+            value_col = col1.selectbox("Value Column", numeric_cols)
+            
+            group_col = None
+            if cat_cols:
+                group_col = col2.selectbox("Group By (Optional)", ["None"] + cat_cols)
+                if group_col == "None":
+                    group_col = None
+            
+            fig = px.box(
+                df,
+                y=value_col,
+                x=group_col if group_col else None,
+                title=f"Box Plot of {value_col}",
+                template="plotly_white"
+            )
+            fig.update_layout(height=500, hovermode="closest")
+            st.plotly_chart(fig, use_container_width=True, config=chart_config)
+        else:
+            st.warning("No numeric columns found")
+    
+    elif chart_type == "Violin Plot":
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        cat_cols = df.select_dtypes(include=['object']).columns.tolist()
+        
+        if numeric_cols:
+            col1, col2 = st.columns(2)
+            value_col = col1.selectbox("Value Column", numeric_cols)
+            
+            group_col = None
+            if cat_cols:
+                group_col = col2.selectbox("Group By (Optional)", ["None"] + cat_cols)
+                if group_col == "None":
+                    group_col = None
+            
+            fig = px.violin(
+                df,
+                y=value_col,
+                x=group_col if group_col else None,
+                title=f"Violin Plot of {value_col}",
+                template="plotly_white",
+                points="outliers"
+            )
+            fig.update_layout(height=500)
+            st.plotly_chart(fig, use_container_width=True, config=chart_config)
         else:
             st.warning("No numeric columns found")
     
@@ -1067,19 +1136,42 @@ def dashboard_page():
             value_col = col2.selectbox("Value Column", numeric_cols)
             
             fig = Visualizer.plot_time_series(df, date_col, value_col)
-            st.plotly_chart(fig, use_container_width=True)
+            fig.update_layout(
+                template="plotly_white",
+                height=500,
+                hovermode="x unified",
+                title_font_size=14
+            )
+            st.plotly_chart(fig, use_container_width=True, config=chart_config)
         else:
             st.warning("Need date and numeric columns")
     
     elif chart_type == "Scatter Plot":
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        cat_cols = df.select_dtypes(include=['object']).columns.tolist()
+        
         if len(numeric_cols) >= 2:
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             x_col = col1.selectbox("X Axis", numeric_cols)
             y_col = col2.selectbox("Y Axis", [c for c in numeric_cols if c != x_col])
             
-            fig = Visualizer.plot_scatter(df, x_col, y_col)
-            st.plotly_chart(fig, use_container_width=True)
+            color_col = None
+            if cat_cols:
+                color_col = col3.selectbox("Color By (Optional)", ["None"] + cat_cols)
+                if color_col == "None":
+                    color_col = None
+            
+            fig = px.scatter(
+                df,
+                x=x_col,
+                y=y_col,
+                color=color_col,
+                title=f"{y_col} vs {x_col}",
+                template="plotly_white",
+                hover_data={col: ":.2f" if df[col].dtype != 'object' else True for col in [x_col, y_col] + ([color_col] if color_col else [])}
+            )
+            fig.update_layout(height=500)
+            st.plotly_chart(fig, use_container_width=True, config=chart_config)
         else:
             st.warning("Need at least 2 numeric columns")
     
@@ -1089,8 +1181,116 @@ def dashboard_page():
         x_col = col1.selectbox("X Axis (Category)", columns)
         y_col = col2.selectbox("Y Axis (Value)", [c for c in columns if c != x_col])
         
-        fig = px.bar(df, x=x_col, y=y_col, title=f'{y_col} by {x_col}')
-        st.plotly_chart(fig, use_container_width=True)
+        fig = px.bar(
+            df,
+            x=x_col,
+            y=y_col,
+            title=f'{y_col} by {x_col}',
+            template="plotly_white",
+            color=y_col,
+            color_continuous_scale="Viridis"
+        )
+        fig.update_layout(height=500, hovermode="x unified")
+        st.plotly_chart(fig, use_container_width=True, config=chart_config)
+    
+    elif chart_type == "Histogram":
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if numeric_cols:
+            col1, col2 = st.columns(2)
+            value_col = col1.selectbox("Column", numeric_cols)
+            nbins = col2.slider("Number of Bins", 10, 100, 30)
+            
+            fig = px.histogram(
+                df,
+                x=value_col,
+                nbins=nbins,
+                title=f"Histogram of {value_col}",
+                template="plotly_white",
+                color_discrete_sequence=["#636EFA"],
+                marginal="box"
+            )
+            fig.update_layout(height=500)
+            st.plotly_chart(fig, use_container_width=True, config=chart_config)
+        else:
+            st.warning("No numeric columns found")
+    
+    elif chart_type == "Pie Chart":
+        columns = df.columns.tolist()
+        cat_cols = df.select_dtypes(include=['object']).columns.tolist()
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if cat_cols and numeric_cols:
+            col1, col2 = st.columns(2)
+            label_col = col1.selectbox("Category Column", cat_cols)
+            value_col = col2.selectbox("Value Column", numeric_cols)
+            
+            # Aggregate by category
+            pie_data = df.groupby(label_col)[value_col].sum().reset_index()
+            
+            fig = px.pie(
+                pie_data,
+                values=value_col,
+                names=label_col,
+                title=f"{value_col} Distribution by {label_col}",
+                template="plotly_white",
+                hover_data={value_col: ":.2f"}
+            )
+            fig.update_layout(
+                height=500,
+                font=dict(size=11)
+            )
+            st.plotly_chart(fig, use_container_width=True, config=chart_config)
+        else:
+            st.info("Need at least 1 categorical column and 1 numeric column for pie chart")
+    
+    elif chart_type == "Heatmap":
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if len(numeric_cols) >= 2:
+            # Select subset of columns for heatmap
+            selected_cols = st.multiselect("Select columns for heatmap", numeric_cols, default=numeric_cols[:min(10, len(numeric_cols))])
+            
+            if selected_cols:
+                corr_matrix = df[selected_cols].corr()
+                fig = px.imshow(
+                    corr_matrix,
+                    text_auto=".2f",
+                    aspect="auto",
+                    color_continuous_scale="RdBu_r",
+                    title="Correlation Heatmap",
+                    labels=dict(color="Correlation")
+                )
+                fig.update_layout(height=600)
+                st.plotly_chart(fig, use_container_width=True, config=chart_config)
+        else:
+            st.info("Need at least 2 numeric columns for heatmap")
+    
+    elif chart_type == "Sunburst (Categorical)":
+        cat_cols = df.select_dtypes(include=['object']).columns.tolist()
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if len(cat_cols) >= 2 and numeric_cols:
+            col1, col2, col3 = st.columns(3)
+            level1 = col1.selectbox("Level 1", cat_cols)
+            level2 = col2.selectbox("Level 2", [c for c in cat_cols if c != level1])
+            value_col = col3.selectbox("Values", numeric_cols)
+            
+            # Create sunburst data
+            sunburst_data = df.groupby([level1, level2])[value_col].sum().reset_index()
+            
+            fig = px.sunburst(
+                sunburst_data,
+                labels=[level1, level2],
+                parents=[""] + [level1] * len(sunburst_data),
+                values=value_col,
+                title=f"Sunburst: {level1} → {level2} by {value_col}",
+                template="plotly_white"
+            )
+            fig.update_layout(height=600)
+            st.plotly_chart(fig, use_container_width=True, config=chart_config)
+        else:
+            st.info("Need at least 2 categorical columns and 1 numeric column")
 
 
 def forecasting_page():
@@ -1283,6 +1483,12 @@ def data_analysis_page():
             title="Feature Correlation Matrix",
             labels=dict(color="Correlation")
         )
+        fig.update_layout(
+            height=600,
+            font=dict(size=10),
+            title_font_size=14,
+            hovermode="closest"
+        )
         st.plotly_chart(fig, use_container_width=True)
         
         # Correlation insights
@@ -1311,16 +1517,34 @@ def data_analysis_page():
                 x=selected_col,
                 title=f"Distribution of {selected_col}",
                 marginal="box",
-                nbins=30
+                nbins=30,
+                template="plotly_white"
+            )
+            fig.update_layout(
+                height=450,
+                hovermode="x unified",
+                showlegend=False
             )
             st.plotly_chart(fig, use_container_width=True)
         
         with col2:
-            stats = df[selected_col].describe()
-            st.metric("Mean", f"{stats['mean']:.2f}")
-            st.metric("Median", f"{df[selected_col].median():.2f}")
-            st.metric("Std Dev", f"{stats['std']:.2f}")
-            st.metric("Skewness", f"{df[selected_col].skew():.2f}")
+            # Add box plot alternative
+            fig_box = px.box(
+                df,
+                y=selected_col,
+                title=f"Box Plot of {selected_col}",
+                template="plotly_white"
+            )
+            fig_box.update_layout(height=450, showlegend=False)
+            st.plotly_chart(fig_box, use_container_width=True)
+        
+        # Statistics in columns
+        col1, col2, col3, col4 = st.columns(4)
+        stats = df[selected_col].describe()
+        col1.metric("Mean", f"{stats['mean']:.2f}")
+        col2.metric("Median", f"{df[selected_col].median():.2f}")
+        col3.metric("Std Dev", f"{stats['std']:.2f}")
+        col4.metric("Skewness", f"{df[selected_col].skew():.2f}")
     
     # Categorical distributions
     cat_cols = df.select_dtypes(include=['object']).columns.tolist()
@@ -1329,14 +1553,32 @@ def data_analysis_page():
         selected_cat = st.selectbox("Select categorical column", cat_cols)
         
         value_counts = df[selected_cat].value_counts().head(20)
-        fig = px.bar(
-            x=value_counts.values,
-            y=value_counts.index,
-            orientation='h',
-            title=f"Top Values in {selected_cat}",
-            labels={'x': 'Count', 'y': 'Value'}
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            fig = px.bar(
+                x=value_counts.values,
+                y=value_counts.index,
+                orientation='h',
+                title=f"Top Values in {selected_cat}",
+                labels={'x': 'Count', 'y': 'Value'},
+                template="plotly_white",
+                color=value_counts.values,
+                color_continuous_scale="Viridis"
+            )
+            fig.update_layout(height=400, showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            fig_pie = px.pie(
+                values=value_counts.values,
+                names=value_counts.index,
+                title=f"Distribution of {selected_cat}",
+                template="plotly_white"
+            )
+            fig_pie.update_layout(height=400)
+            st.plotly_chart(fig_pie, use_container_width=True)
     
     # =========================================================================
     # SECTION 6: RECOMMENDATIONS
