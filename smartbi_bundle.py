@@ -782,40 +782,41 @@ def home_page():
     
     #### 🚀 Key Features:
     
-    1. **� Data Analysis & Insights**
-       - Comprehensive data profiling
-       - Automatic quality issue detection
-       - Feature importance analysis
-       - Correlation and relationship insights
+    1. **🔬 Smart Data Profiling & Quality Analysis**
+       - Comprehensive data profiling with automated insights
+       - Real-time quality issue detection and severity assessment
+       - Missing value analysis and correlation discovery
+       - Actionable recommendations for data improvement
     
-    2. **🧹 Data Cleaning & Preparation**
-       - Handle missing values with advanced imputation methods
-       - Remove duplicates and outliers
-       - Data quality analysis and before/after comparison
+    2. **🧪 Intelligent Data Preparation & Cleansing**
+       - Advanced imputation methods (KNN, iterative, statistical)
+       - Duplicate and outlier detection and removal
+       - Before/after comparison with quality metrics
+       - Automated data type optimization
     
-    3. **🔧 Feature Engineering**
-       - Polynomial and interaction features
-       - Statistical rolling features
-       - Categorical encoding
-       - Feature importance analysis
+    3. **⚡ Powerful Feature Engineering**
+       - Create polynomial and interaction features instantly
+       - Generate statistical rolling window features and lags
+       - Automatic categorical encoding and one-hot conversion
+       - AI-powered feature importance ranking
     
-    4. **📈 Dynamic Dashboards**
-       - Interactive visualizations
-       - Correlation analysis
-       - Distribution plots
-       - Custom charts
+    4. **📊 Interactive Business Intelligence Dashboards**
+       - Real-time interactive visualizations powered by Plotly
+       - Deep correlation analysis and relationship mapping
+       - Distribution and trend analysis across dimensions
+       - Export-ready custom charts and reports
     
-    5. **🔮 Time Series Forecasting**
-       - Prophet-based forecasting
-       - Seasonality detection
-       - Confidence intervals
-       - Long-term predictions
+    5. **🎯 Predictive Time Series Forecasting**
+       - Prophet-based forecasting with trend and seasonality detection
+       - Automatic confidence interval calculations
+       - Long-term predictions with accuracy metrics
+       - Seasonal decomposition and anomaly detection
     
-    6. **🤖 AI Assistant**
-       - Conversational interface
-       - Data insights
-       - Analysis recommendations
-       - Context-aware help
+    6. **🤖 AI-Powered Insights & Assistance**
+       - Natural language interface with conversation history
+       - Context-aware data analysis and recommendations
+       - Smart insights generation from your data
+       - Personalized guidance throughout your analysis journey
     
     #### 📋 Quick Start:
     
