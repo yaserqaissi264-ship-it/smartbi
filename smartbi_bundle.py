@@ -453,6 +453,72 @@ class InsightGenerator:
             recommendations.append("📋 Quality Check: Consider reviewing and improving data quality before analysis")
         
         return recommendations if recommendations else ["✅ Data looks ready for analysis!"]
+    
+    @staticmethod
+    def analyze_product_associations(df, transaction_column, separator=','):
+        """Analyze which products are frequently bought together (Market Basket Analysis)"""
+        try:
+            # Parse transactions
+            transactions = []
+            for idx, value in df[transaction_column].items():
+                if pd.isna(value):
+                    continue
+                # Split products and clean whitespace
+                products = [p.strip() for p in str(value).split(separator)]
+                products = [p for p in products if p]  # Remove empty strings
+                if len(products) > 0:
+                    transactions.append(products)
+            
+            if len(transactions) < 2:
+                return {"error": "Not enough transactions for analysis"}
+            
+            # Calculate product pairs and their frequencies
+            product_pairs = {}
+            product_freq = {}
+            
+            for transaction in transactions:
+                # Count individual products
+                for product in transaction:
+                    product_freq[product] = product_freq.get(product, 0) + 1
+                
+                # Count product pairs
+                for i in range(len(transaction)):
+                    for j in range(i + 1, len(transaction)):
+                        pair = tuple(sorted([transaction[i], transaction[j]]))
+                        product_pairs[pair] = product_pairs.get(pair, 0) + 1
+            
+            # Calculate association metrics
+            total_transactions = len(transactions)
+            associations = []
+            
+            for (product_a, product_b), count in product_pairs.items():
+                support = count / total_transactions
+                confidence_ab = count / product_freq.get(product_a, 1)
+                confidence_ba = count / product_freq.get(product_b, 1)
+                lift = (count / total_transactions) / ((product_freq.get(product_a, 1) / total_transactions) * 
+                                                        (product_freq.get(product_b, 1) / total_transactions))
+                
+                associations.append({
+                    'Product A': product_a,
+                    'Product B': product_b,
+                    'Co-occurrence': count,
+                    'Support': f"{support:.2%}",
+                    'Confidence (A→B)': f"{confidence_ab:.2%}",
+                    'Confidence (B→A)': f"{confidence_ba:.2%}",
+                    'Lift': f"{lift:.2f}"
+                })
+            
+            # Sort by co-occurrence count
+            associations.sort(key=lambda x: x['Co-occurrence'], reverse=True)
+            
+            return {
+                'associations': associations,
+                'product_freq': sorted(product_freq.items(), key=lambda x: x[1], reverse=True),
+                'total_transactions': total_transactions,
+                'unique_products': len(product_freq)
+            }
+        except Exception as e:
+            return {"error": f"Error analyzing associations: {str(e)}"}
 
 
 class FeatureExtractor:
@@ -737,6 +803,151 @@ class Visualizer:
             color=color_col,
             title=f'{y_col} vs {x_col}'
         )
+        return fig
+    
+    @staticmethod
+    def plot_product_association_network(associations, top_n=15):
+        """Visualize product associations as a network"""
+        if not associations or len(associations) == 0:
+            return None
+        
+        # Limit to top N associations
+        top_associations = associations[:top_n]
+        
+        # Create nodes and edges
+        products = set()
+        edges = []
+        edge_labels = []
+        
+        for assoc in top_associations:
+            products.add(assoc['Product A'])
+            products.add(assoc['Product B'])
+            edges.append((assoc['Product A'], assoc['Product B'], assoc['Co-occurrence']))
+            edge_labels.append(f"{assoc['Co-occurrence']}")
+        
+        # Create Plotly visualization
+        nodes_list = list(products)
+        node_x = []
+        node_y = []
+        
+        # Simple circular layout
+        import math
+        circle_radius = 1
+        for i, node in enumerate(nodes_list):
+            angle = 2 * math.pi * i / len(nodes_list)
+            node_x.append(circle_radius * math.cos(angle))
+            node_y.append(circle_radius * math.sin(angle))
+        
+        # Create edges
+        edge_x = []
+        edge_y = []
+        edge_weight = []
+        
+        node_indices = {node: i for i, node in enumerate(nodes_list)}
+        
+        for product_a, product_b, count in edges:
+            idx_a = node_indices[product_a]
+            idx_b = node_indices[product_b]
+            edge_x.extend([node_x[idx_a], node_x[idx_b], None])
+            edge_y.extend([node_y[idx_a], node_y[idx_b], None])
+            edge_weight.append(count)
+        
+        # Create figure
+        fig = go.Figure()
+        
+        # Add edges
+        fig.add_trace(go.Scatter(
+            x=edge_x, y=edge_y,
+            mode='lines',
+            line=dict(width=1, color='#888'),
+            hoverinfo='none',
+            showlegend=False
+        ))
+        
+        # Add nodes
+        fig.add_trace(go.Scatter(
+            x=node_x, y=node_y,
+            mode='markers+text',
+            marker=dict(
+                size=20,
+                color='#FF6B6B',
+                line=dict(color='#C92A2A', width=2)
+            ),
+            text=nodes_list,
+            textposition='top center',
+            hovertext=nodes_list,
+            hoverinfo='text',
+            showlegend=False
+        ))
+        
+        fig.update_layout(
+            title="Product Association Network",
+            showlegend=False,
+            hovermode='closest',
+            margin=dict(b=0, l=0, r=0, t=50),
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            plot_bgcolor='#f8f9fa',
+            height=600
+        )
+        
+        return fig
+    
+    @staticmethod
+    def plot_product_frequency(product_freq, top_n=15):
+        """Plot most frequently purchased products"""
+        if not product_freq or len(product_freq) == 0:
+            return None
+        
+        top_products = product_freq[:top_n]
+        products = [p[0] for p in top_products]
+        frequencies = [p[1] for p in top_products]
+        
+        fig = px.bar(
+            x=frequencies,
+            y=products,
+            orientation='h',
+            title='Most Frequently Purchased Products',
+            labels={'x': 'Purchase Count', 'y': 'Product'},
+            color=frequencies,
+            color_continuous_scale='Viridis'
+        )
+        
+        fig.update_layout(height=400, showlegend=False)
+        return fig
+    
+    @staticmethod
+    def plot_association_strength(associations, top_n=15):
+        """Plot top product associations by strength"""
+        if not associations or len(associations) == 0:
+            return None
+        
+        top_assoc = associations[:top_n]
+        
+        df_assoc = pd.DataFrame({
+            'Pair': [f"{a['Product A']} → {a['Product B']}" for a in top_assoc],
+            'Co-occurrence': [a['Co-occurrence'] for a in top_assoc],
+            'Lift': [float(a['Lift']) for a in top_assoc]
+        })
+        
+        fig = go.Figure(data=[
+            go.Bar(
+                y=df_assoc['Pair'],
+                x=df_assoc['Co-occurrence'],
+                name='Co-occurrence',
+                orientation='h',
+                marker_color='#4ECDC4'
+            )
+        ])
+        
+        fig.update_layout(
+            title='Top Product Associations',
+            xaxis_title='Co-occurrence Count',
+            yaxis_title='Product Pair',
+            height=400,
+            showlegend=False
+        )
+        
         return fig
 
 
@@ -1293,6 +1504,157 @@ def dashboard_page():
             st.info("Need at least 2 categorical columns and 1 numeric column")
 
 
+def market_basket_page():
+    """Market Basket Analysis - Find frequently bought items together"""
+    st.title("🛒 Market Basket Analysis")
+    st.markdown("Analyze which products are frequently purchased together")
+    
+    if st.session_state.current_df is None:
+        st.warning("⚠️ No data loaded. Please upload data first.")
+        return
+    
+    df = st.session_state.current_df
+    
+    # Column selection
+    st.subheader("Select Transaction Column")
+    st.markdown("Choose a column that contains the list of products in each transaction")
+    
+    transaction_col = st.selectbox(
+        "Transaction Column",
+        df.columns.tolist(),
+        help="This column should contain products separated by a delimiter (e.g., 'A, B, C')"
+    )
+    
+    # Delimiter selection
+    col1, col2 = st.columns(2)
+    with col1:
+        delimiter = st.text_input("Product Separator/Delimiter", value=",", help="Character(s) that separate products")
+    
+    with col2:
+        min_support = st.slider(
+            "Minimum Support (%)",
+            min_value=1,
+            max_value=100,
+            value=10,
+            help="Minimum percentage of transactions where products must appear together"
+        )
+    
+    # Run analysis
+    if st.button("🔍 Analyze Product Associations"):
+        with st.spinner("Analyzing product associations..."):
+            result = InsightGenerator.analyze_product_associations(df, transaction_col, separator=delimiter)
+            
+            if "error" in result:
+                st.error(f"Error: {result['error']}")
+                return
+            
+            # Display summary
+            st.subheader("📊 Analysis Summary")
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total Transactions", result['total_transactions'])
+            col2.metric("Unique Products", result['unique_products'])
+            col3.metric("Product Associations", len(result['associations']))
+            
+            # Filter by minimum support
+            min_support_count = max(1, int(result['total_transactions'] * min_support / 100))
+            filtered_associations = [a for a in result['associations'] if a['Co-occurrence'] >= min_support_count]
+            col4.metric("Above Min Support", len(filtered_associations))
+            
+            st.markdown("---")
+            
+            # Tabs for different views
+            tab1, tab2, tab3, tab4 = st.tabs(["Association Table", "Network View", "Product Frequency", "Association Strength"])
+            
+            with tab1:
+                st.subheader("Top Product Associations")
+                st.markdown(f"Showing associations with at least {min_support}% support")
+                
+                if filtered_associations:
+                    # Create display dataframe
+                    display_assoc = []
+                    for assoc in filtered_associations[:50]:  # Top 50
+                        display_assoc.append({
+                            '🔗 Product A': assoc['Product A'],
+                            '🔗 Product B': assoc['Product B'],
+                            '📊 Bought Together': assoc['Co-occurrence'],
+                            '📈 Support': assoc['Support'],
+                            '✅ Confidence A→B': assoc['Confidence (A→B)'],
+                            '✅ Confidence B→A': assoc['Confidence (B→A)'],
+                            '🎯 Lift': assoc['Lift']
+                        })
+                    
+                    st.dataframe(display_assoc, use_container_width=True)
+                    
+                    # Download option
+                    csv = pd.DataFrame(display_assoc).to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Associations as CSV",
+                        data=csv,
+                        file_name="product_associations.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.info("No associations found with the current minimum support threshold. Try lowering the threshold.")
+            
+            with tab2:
+                st.subheader("Product Association Network")
+                st.markdown("Visual representation of product relationships")
+                
+                fig_network = Visualizer.plot_product_association_network(filtered_associations, top_n=15)
+                if fig_network:
+                    st.plotly_chart(fig_network, use_container_width=True)
+                else:
+                    st.info("Not enough data to create network visualization")
+            
+            with tab3:
+                st.subheader("Most Frequently Purchased Products")
+                
+                fig_freq = Visualizer.plot_product_frequency(result['product_freq'], top_n=20)
+                if fig_freq:
+                    st.plotly_chart(fig_freq, use_container_width=True)
+                
+                # Show as table
+                st.subheader("Product Frequency Table")
+                freq_df = pd.DataFrame(
+                    result['product_freq'],
+                    columns=['Product', 'Purchase Count']
+                )
+                st.dataframe(freq_df, use_container_width=True)
+            
+            with tab4:
+                st.subheader("Association Strength Analysis")
+                st.markdown("Top product pairs ranked by co-occurrence")
+                
+                fig_strength = Visualizer.plot_association_strength(filtered_associations, top_n=15)
+                if fig_strength:
+                    st.plotly_chart(fig_strength, use_container_width=True)
+            
+            # Insights
+            st.markdown("---")
+            st.subheader("💡 Key Insights & Recommendations")
+            
+            if filtered_associations:
+                top_pair = filtered_associations[0]
+                insights = [
+                    f"🏆 **Strongest Association**: {top_pair['Product A']} and {top_pair['Product B']} are bought together {top_pair['Co-occurrence']} times",
+                    f"💰 **Business Opportunity**: Consider bundling {top_pair['Product A']} with {top_pair['Product B']} to boost sales",
+                ]
+                
+                # Additional insights
+                if len(filtered_associations) > 1:
+                    avg_cooccurrence = sum(a['Co-occurrence'] for a in filtered_associations) / len(filtered_associations)
+                    insights.append(f"📊 **Average Co-occurrence**: {avg_cooccurrence:.1f} transactions")
+                
+                # Most popular product
+                most_popular = result['product_freq'][0]
+                insights.append(f"🌟 **Most Popular**: {most_popular[0]} appears in {most_popular[1]} transactions")
+                
+                for insight in insights:
+                    st.info(insight)
+            else:
+                st.warning("No strong product associations found with current settings. Consider lowering the minimum support threshold.")
+
+
 def forecasting_page():
     """Time series forecasting with Prophet"""
     st.title("🔮 Time Series Forecasting")
@@ -1845,11 +2207,13 @@ def main():
     st.sidebar.title("🎯 SmartBI")
     st.sidebar.markdown("---")
     
-    page = st.sidebar.radio(
-        "Navigation",
-        ["🏠 Home", "📤 Data Upload", "📊 Data Overview", "🔬 Data Analysis", "🧹 Data Cleaning", 
-         "🔧 Feature Engineering", "📈 Dashboard", "🔮 Forecasting", "🤖 AI Assistant"]
-    )
+    menu_options = ["🏠 Home", "📤 Data Upload", "📊 Data Overview", "🔬 Data Analysis", "🧹 Data Cleaning", 
+                    "🔧 Feature Engineering", "📈 Dashboard", "🛒 Market Basket", "🔮 Forecasting", "🤖 AI Assistant"]
+    
+    st.write(f"DEBUG: Menu has {len(menu_options)} items")
+    st.write(f"DEBUG: Market Basket in list: {'🛒 Market Basket' in menu_options}")
+    
+    page = st.sidebar.radio("Navigation", menu_options)
     
     # Page routing
     if page == "🏠 Home":
@@ -1866,6 +2230,8 @@ def main():
         feature_engineering_page()
     elif page == "📈 Dashboard":
         dashboard_page()
+    elif page == "🛒 Market Basket":
+        market_basket_page()
     elif page == "🔮 Forecasting":
         forecasting_page()
     elif page == "🤖 AI Assistant":
