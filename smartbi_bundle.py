@@ -1011,19 +1011,25 @@ def home_page():
        - Automatic categorical encoding and one-hot conversion
        - AI-powered feature importance ranking
     
-    4. **📊 Interactive Business Intelligence Dashboards**
+    4. **� Market Basket Analysis**
+       - Discover which products are frequently bought together
+       - Calculate association metrics (Support, Confidence, Lift)
+       - Visualize product relationships and networks
+       - Generate business recommendations for bundling and cross-sell
+    
+    5. **📊 Interactive Business Intelligence Dashboards**
        - Real-time interactive visualizations powered by Plotly
        - Deep correlation analysis and relationship mapping
        - Distribution and trend analysis across dimensions
        - Export-ready custom charts and reports
     
-    5. **🎯 Predictive Time Series Forecasting**
+    6. **🎯 Predictive Time Series Forecasting**
        - Prophet-based forecasting with trend and seasonality detection
        - Automatic confidence interval calculations
        - Long-term predictions with accuracy metrics
        - Seasonal decomposition and anomaly detection
     
-    6. **🤖 AI-Powered Insights & Assistance**
+    7. **🤖 AI-Powered Insights & Assistance**
        - Natural language interface with conversation history
        - Context-aware data analysis and recommendations
        - Smart insights generation from your data
@@ -1034,10 +1040,11 @@ def home_page():
     1. **Upload Data**: Go to "Data Upload" and load your CSV file
     2. **Analyze**: Use "Data Analysis" to understand your dataset
     3. **Clean Data**: Use "Data Cleaning" to prepare your data
-    4. **Engineer Features**: Extract and create new features
-    5. **Visualize**: Create dashboards with interactive charts
-    6. **Forecast**: Predict future trends with time series analysis
-    7. **Ask AI**: Get insights from our AI assistant
+    4. **Analyze Relationships**: Use "Market Basket" to find product associations
+    5. **Engineer Features**: Extract and create new features
+    6. **Visualize**: Create dashboards with interactive charts
+    7. **Forecast**: Predict future trends with time series analysis
+    8. **Ask AI**: Get insights from our AI assistant
     """)
     
     # System status
@@ -2209,9 +2216,6 @@ def main():
     
     menu_options = ["🏠 Home", "📤 Data Upload", "📊 Data Overview", "🔬 Data Analysis", "🧹 Data Cleaning", 
                     "🔧 Feature Engineering", "📈 Dashboard", "🛒 Market Basket", "🔮 Forecasting", "🤖 AI Assistant"]
-    
-    st.write(f"DEBUG: Menu has {len(menu_options)} items")
-    st.write(f"DEBUG: Market Basket in list: {'🛒 Market Basket' in menu_options}")
     
     page = st.sidebar.radio("Navigation", menu_options)
     
