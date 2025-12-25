@@ -1,0 +1,28 @@
+Transaction_ID,Date,Time,Day_of_Week,Year,Customer_ID,Customer_Age,Customer_Status,Payment_Method,Primary_Item_Category,Items,Total_Amount_JOD
+TRX002140,1/1/2023,9:52:35 AM,Sunday,2023,CUST0452,28,Returning,Debit Card,Graphic Cards,RTX 4090+Budget Office Headset,1972.99
+TRX002189,1/1/2023,11:17:10 AM,Sunday,2023,CUST0043,59,Returning,Debit Card,Desktop PCs,High-End Gaming PC+Mesh Wi-Fi System+850W Gold Modular PSU+Budget Office Headset+Large RGB Gaming Mat+HP Pavilion 15,3063.26
+TRX001106,1/1/2023,1:59:12 PM,Sunday,2023,CUST0579,59,New,Credit Card,Routers,Wi-Fi 6 Router+Wireless Ergonomic Mouse,111.08
+TRX001428,1/1/2023,4:18:39 PM,Sunday,2023,CUST0017,62,Returning,Mobile Wallet,PC Accessories,Thermal Paste+Budget Desktop Build+Budget Office Headset+Case Fan 120mm+Xbox Headset Adapter+32GB DDR5 Kit+Laser Printer+Cable Management Kit,886.50
+TRX000305,1/1/2023,4:46:13 PM,Sunday,2023,CUST0098,45,New,Cash,PC Accessories,Thermal Paste+RTX 4090+RTX 4060+High-Fidelity Gaming Headset,2491.70
+TRX000171,1/1/2023,7:00:06 PM,Sunday,2023,CUST0205,34,New,Credit Card,Graphic Cards,RTX 4060+USB-C Hub+RTX 4090+Budget Office Headset+Cable Management Kit,2380.79
+TRX001058,1/1/2023,9:41:06 PM,Sunday,2023,CUST0852,53,Returning,Cash,Desktop PCs,High-End Gaming PC+Dell XPS 13+Thermal Paste+HP Pavilion 15+High-DPI Gaming Mouse+Basic Optical Mouse,4266.45
+TRX000123,1/1/2023,9:56:23 PM,Sunday,2023,CUST0051,46,Returning,Credit Card,Controllers,PC Gaming Controller+High-DPI Gaming Mouse+27" QHD 144Hz Monitor+Basic Optical Mouse+HDMI Cable 2m+Dell XPS 13,1772.38
+TRX001281,1/2/2023,12:35:38 PM,Monday,2023,CUST0791,61,Returning,Credit Card,Power Supplies,850W Gold Modular PSU+Mid-Range Gaming PC+High-End Gaming PC+HDMI Cable 2m+Inkjet All-in-One Printer+MacBook Air M2+Ergonomic Office Chair+Wireless Mechanical Keyboard,4653.94
+TRX001465,1/2/2023,2:35:16 PM,Monday,2023,CUST0654,63,Returning,Cash,Printers,Laser Printer,211.77
+TRX002048,1/2/2023,3:19:22 PM,Monday,2023,CUST0273,53,Returning,Cash,Motherboards,Z790 Motherboard+HP Pavilion 15,843.71
+TRX000330,1/2/2023,4:44:32 PM,Monday,2023,CUST0094,51,New,Cash,Routers,Wi-Fi 6 Router+High-Fidelity Gaming Headset+Laser Printer+500GB NVMe SSD+PC Gaming Controller+RTX 4090+16GB DDR4 Kit,2431.57
+TRX001483,1/2/2023,5:02:54 PM,Monday,2023,CUST0165,39,Returning,Credit Card,Routers,Mesh Wi-Fi System+RGB Gaming Keyboard,181.20
+TRX000063,1/2/2023,5:12:08 PM,Monday,2023,CUST0055,51,New,Cash,Gaming Chairs,Racing Style Gaming Chair+RTX 4060+Z790 Motherboard+Basic Optical Mouse+24" FHD Monitor+Ergonomic Office Chair+Budget Office Headset+Large RGB Gaming Mat,1355.25
+TRX000645,1/2/2023,5:34:41 PM,Monday,2023,CUST0437,19,Returning,Debit Card,Routers,Wi-Fi 6 Router,76.43
+TRX000232,1/2/2023,6:07:50 PM,Monday,2023,CUST0636,55,New,Debit Card,Storage,1TB Portable SSD+B650 Motherboard+Laser Printer,438.13
+TRX001642,1/2/2023,9:49:34 PM,Monday,2023,CUST0825,33,New,Credit Card,Printers,Laser Printer+Racing Style Gaming Chair+Xbox Headset Adapter,598.99
+TRX000224,1/3/2023,10:38:20 AM,Tuesday,2023,CUST0034,60,Returning,Cash,RAM,16GB DDR4 Kit+550W Bronze PSU+Mesh Wi-Fi System,172.49
+TRX000544,1/3/2023,5:48:15 PM,Tuesday,2023,CUST0992,55,New,Cash,Power Supplies,550W Bronze PSU+850W Gold Modular PSU+500GB NVMe SSD+PS5 Controller Charger+Basic Wired Keyboard+Ergonomic Office Chair+Laser Printer+Z790 Motherboard,892.39
+TRX002341,1/4/2023,8:15:30 AM,Wednesday,2023,CUST0111,42,New,Credit Card,Gaming Chairs,Racing Style Gaming Chair+RGB Gaming Keyboard+24" FHD Monitor,645.50
+TRX001937,1/4/2023,2:30:15 PM,Wednesday,2023,CUST0222,38,Returning,Debit Card,Routers,Mesh Wi-Fi System+RTX 4090+HDMI Cable 2m,423.99
+TRX002556,1/5/2023,11:20:45 AM,Thursday,2023,CUST0333,55,New,Cash,Desktop PCs,Mid-Range Gaming PC+16GB DDR4 Kit+550W Bronze PSU+Budget Office Headset,2156.75
+TRX002789,1/5/2023,4:45:30 PM,Thursday,2023,CUST0444,29,Returning,Credit Card,Graphic Cards,RTX 4060+RTX 4090+Thermal Paste+Cable Management Kit,1834.32
+TRX001234,1/6/2023,9:00:00 AM,Friday,2023,CUST0555,51,New,Mobile Wallet,Monitors,24" FHD Monitor+27" QHD 144Hz Monitor+HDMI Cable 2m,876.54
+TRX001567,1/6/2023,3:15:22 PM,Friday,2023,CUST0666,44,Returning,Cash,Power Supplies,850W Gold Modular PSU+High-End Gaming PC+HDMI Cable 2m+Wireless Mechanical Keyboard,1289.99
+TRX001890,1/7/2023,10:30:00 AM,Saturday,2023,CUST0777,36,New,Credit Card,Storage,1TB Portable SSD+500GB NVMe SSD+High-DPI Gaming Mouse+Laser Printer,567.81
+TRX002101,1/7/2023,6:45:15 PM,Saturday,2023,CUST0888,62,Returning,Debit Card,Controllers,PS5 Controller Charger+High-DPI Gaming Mouse+Xbox Headset Adapter,234.56

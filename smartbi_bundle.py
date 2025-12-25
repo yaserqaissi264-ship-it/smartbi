@@ -455,7 +455,7 @@ class InsightGenerator:
         return recommendations if recommendations else ["✅ Data looks ready for analysis!"]
     
     @staticmethod
-    def analyze_product_associations(df, transaction_column, separator=','):
+    def analyze_product_associations(df, transaction_column, separator=',', min_product_length=2):
         """Analyze which products are frequently bought together (Market Basket Analysis)"""
         try:
             # Parse transactions
@@ -466,7 +466,7 @@ class InsightGenerator:
                 # Split products and clean whitespace
                 products = [p.strip() for p in str(value).split(separator)]
                 products = [p for p in products if p]  # Remove empty strings
-                if len(products) > 0:
+                if len(products) >= min_product_length:
                     transactions.append(products)
             
             if len(transactions) < 2:
@@ -475,6 +475,7 @@ class InsightGenerator:
             # Calculate product pairs and their frequencies
             product_pairs = {}
             product_freq = {}
+            triplets = {}
             
             for transaction in transactions:
                 # Count individual products
@@ -486,6 +487,13 @@ class InsightGenerator:
                     for j in range(i + 1, len(transaction)):
                         pair = tuple(sorted([transaction[i], transaction[j]]))
                         product_pairs[pair] = product_pairs.get(pair, 0) + 1
+                
+                # Count triplets
+                for i in range(len(transaction)):
+                    for j in range(i + 1, len(transaction)):
+                        for k in range(j + 1, len(transaction)):
+                            triplet = tuple(sorted([transaction[i], transaction[j], transaction[k]]))
+                            triplets[triplet] = triplets.get(triplet, 0) + 1
             
             # Calculate association metrics
             total_transactions = len(transactions)
@@ -511,14 +519,66 @@ class InsightGenerator:
             # Sort by co-occurrence count
             associations.sort(key=lambda x: x['Co-occurrence'], reverse=True)
             
+            # Process triplets
+            triplet_data = []
+            for (prod_a, prod_b, prod_c), count in sorted(triplets.items(), key=lambda x: x[1], reverse=True)[:20]:
+                support = count / total_transactions
+                triplet_data.append({
+                    'Products': f"{prod_a} + {prod_b} + {prod_c}",
+                    'Co-occurrence': count,
+                    'Support': f"{support:.2%}"
+                })
+            
             return {
                 'associations': associations,
+                'triplets': triplet_data,
                 'product_freq': sorted(product_freq.items(), key=lambda x: x[1], reverse=True),
                 'total_transactions': total_transactions,
                 'unique_products': len(product_freq)
             }
         except Exception as e:
             return {"error": f"Error analyzing associations: {str(e)}"}
+    
+    @staticmethod
+    def analyze_pos_data(df):
+        """Comprehensive POS data analysis"""
+        try:
+            analysis = {}
+            
+            # Transaction metrics
+            if 'Total_Amount' in df.columns or 'Total_Amount_JOD' in df.columns:
+                amount_col = 'Total_Amount_JOD' if 'Total_Amount_JOD' in df.columns else 'Total_Amount'
+                analysis['total_revenue'] = df[amount_col].sum()
+                analysis['avg_transaction'] = df[amount_col].mean()
+                analysis['max_transaction'] = df[amount_col].max()
+                analysis['min_transaction'] = df[amount_col].min()
+            
+            # Customer analysis
+            if 'Customer_ID' in df.columns:
+                analysis['unique_customers'] = df['Customer_ID'].nunique()
+                analysis['repeat_rate'] = (df.groupby('Customer_ID').size() > 1).sum() / analysis['unique_customers']
+            
+            # Payment method analysis
+            if 'Payment_Method' in df.columns:
+                analysis['payment_methods'] = df['Payment_Method'].value_counts().to_dict()
+            
+            # Customer status
+            if 'Customer_Status' in df.columns:
+                analysis['customer_status'] = df['Customer_Status'].value_counts().to_dict()
+            
+            # Category analysis
+            if 'Primary_Item_Category' in df.columns:
+                category_stats = df.groupby('Primary_Item_Category').agg({
+                    'Transaction_ID': 'count',
+                }).rename(columns={'Transaction_ID': 'count'})
+                if 'Total_Amount_JOD' in df.columns:
+                    category_stats['revenue'] = df.groupby('Primary_Item_Category')['Total_Amount_JOD'].sum()
+                    category_stats['avg_price'] = df.groupby('Primary_Item_Category')['Total_Amount_JOD'].mean()
+                analysis['categories'] = category_stats.to_dict()
+            
+            return analysis
+        except Exception as e:
+            return {"error": f"Error in POS analysis: {str(e)}"}
 
 
 class FeatureExtractor:
@@ -1514,7 +1574,7 @@ def dashboard_page():
 def market_basket_page():
     """Market Basket Analysis - Find frequently bought items together"""
     st.title("🛒 Market Basket Analysis")
-    st.markdown("Analyze which products are frequently purchased together")
+    st.markdown("Analyze which products are frequently purchased together and discover business opportunities")
     
     if st.session_state.current_df is None:
         st.warning("⚠️ No data loaded. Please upload data first.")
@@ -1522,144 +1582,272 @@ def market_basket_page():
     
     df = st.session_state.current_df
     
-    # Column selection
-    st.subheader("Select Transaction Column")
-    st.markdown("Choose a column that contains the list of products in each transaction")
+    # Tabs for different analyses
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Product Associations", "POS Overview", "Customer Insights", "Category Analysis", "Time Analysis"])
     
-    transaction_col = st.selectbox(
-        "Transaction Column",
-        df.columns.tolist(),
-        help="This column should contain products separated by a delimiter (e.g., 'A, B, C')"
-    )
-    
-    # Delimiter selection
-    col1, col2 = st.columns(2)
-    with col1:
-        delimiter = st.text_input("Product Separator/Delimiter", value=",", help="Character(s) that separate products")
-    
-    with col2:
-        min_support = st.slider(
-            "Minimum Support (%)",
-            min_value=1,
-            max_value=100,
-            value=10,
-            help="Minimum percentage of transactions where products must appear together"
-        )
-    
-    # Run analysis
-    if st.button("🔍 Analyze Product Associations"):
-        with st.spinner("Analyzing product associations..."):
-            result = InsightGenerator.analyze_product_associations(df, transaction_col, separator=delimiter)
-            
-            if "error" in result:
-                st.error(f"Error: {result['error']}")
-                return
-            
-            # Display summary
-            st.subheader("📊 Analysis Summary")
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Total Transactions", result['total_transactions'])
-            col2.metric("Unique Products", result['unique_products'])
-            col3.metric("Product Associations", len(result['associations']))
-            
-            # Filter by minimum support
-            min_support_count = max(1, int(result['total_transactions'] * min_support / 100))
-            filtered_associations = [a for a in result['associations'] if a['Co-occurrence'] >= min_support_count]
-            col4.metric("Above Min Support", len(filtered_associations))
-            
-            st.markdown("---")
-            
-            # Tabs for different views
-            tab1, tab2, tab3, tab4 = st.tabs(["Association Table", "Network View", "Product Frequency", "Association Strength"])
-            
-            with tab1:
-                st.subheader("Top Product Associations")
-                st.markdown(f"Showing associations with at least {min_support}% support")
-                
-                if filtered_associations:
-                    # Create display dataframe
-                    display_assoc = []
-                    for assoc in filtered_associations[:50]:  # Top 50
-                        display_assoc.append({
-                            '🔗 Product A': assoc['Product A'],
-                            '🔗 Product B': assoc['Product B'],
-                            '📊 Bought Together': assoc['Co-occurrence'],
-                            '📈 Support': assoc['Support'],
-                            '✅ Confidence A→B': assoc['Confidence (A→B)'],
-                            '✅ Confidence B→A': assoc['Confidence (B→A)'],
-                            '🎯 Lift': assoc['Lift']
-                        })
-                    
-                    st.dataframe(display_assoc, use_container_width=True)
-                    
-                    # Download option
-                    csv = pd.DataFrame(display_assoc).to_csv(index=False)
-                    st.download_button(
-                        label="📥 Download Associations as CSV",
-                        data=csv,
-                        file_name="product_associations.csv",
-                        mime="text/csv"
-                    )
-                else:
-                    st.info("No associations found with the current minimum support threshold. Try lowering the threshold.")
-            
-            with tab2:
-                st.subheader("Product Association Network")
-                st.markdown("Visual representation of product relationships")
-                
-                fig_network = Visualizer.plot_product_association_network(filtered_associations, top_n=15)
-                if fig_network:
-                    st.plotly_chart(fig_network, use_container_width=True)
-                else:
-                    st.info("Not enough data to create network visualization")
-            
-            with tab3:
-                st.subheader("Most Frequently Purchased Products")
-                
-                fig_freq = Visualizer.plot_product_frequency(result['product_freq'], top_n=20)
-                if fig_freq:
-                    st.plotly_chart(fig_freq, use_container_width=True)
-                
-                # Show as table
-                st.subheader("Product Frequency Table")
-                freq_df = pd.DataFrame(
-                    result['product_freq'],
-                    columns=['Product', 'Purchase Count']
+    with tab1:
+        st.subheader("Product Association Analysis")
+        st.markdown("Discover which products are frequently purchased together")
+        
+        # Column selection
+        col1, col2 = st.columns(2)
+        with col1:
+            transaction_col = st.selectbox(
+                "Transaction Column",
+                df.columns.tolist(),
+                help="Column containing products separated by delimiter"
+            )
+        
+        with col2:
+            delimiter = st.text_input("Product Separator", value="+", help="Character separating products")
+        
+        # Analysis parameters
+        col1, col2, col3 = st.columns(3)
+        min_support = col1.slider("Min Support (%)", 1, 100, 5)
+        min_products = col2.slider("Min Products/Transaction", 1, 10, 2)
+        show_triplets = col3.checkbox("Show Product Triplets", value=True)
+        
+        if st.button("🔍 Analyze Associations"):
+            with st.spinner("Analyzing product associations..."):
+                result = InsightGenerator.analyze_product_associations(
+                    df, transaction_col, separator=delimiter, min_product_length=min_products
                 )
-                st.dataframe(freq_df, use_container_width=True)
-            
-            with tab4:
-                st.subheader("Association Strength Analysis")
-                st.markdown("Top product pairs ranked by co-occurrence")
                 
-                fig_strength = Visualizer.plot_association_strength(filtered_associations, top_n=15)
-                if fig_strength:
-                    st.plotly_chart(fig_strength, use_container_width=True)
+                if "error" in result:
+                    st.error(f"Error: {result['error']}")
+                else:
+                    # Summary metrics
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Total Transactions", result['total_transactions'])
+                    col2.metric("Unique Products", result['unique_products'])
+                    col3.metric("Product Pairs Found", len(result['associations']))
+                    col4.metric("Avg Products/Transaction", f"{sum(len(t) for t in df[transaction_col].str.split(delimiter)) / len(df):.1f}")
+                    
+                    st.markdown("---")
+                    
+                    # Associations subtabs
+                    sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs(
+                        ["📊 Association Rules", "🕸️ Network", "📈 Product Frequency", "⭐ Strength"]
+                    )
+                    
+                    with sub_tab1:
+                        st.subheader("Top Product Associations")
+                        
+                        # Filter by minimum support
+                        min_support_count = max(1, int(result['total_transactions'] * min_support / 100))
+                        filtered_associations = [a for a in result['associations'] if a['Co-occurrence'] >= min_support_count]
+                        
+                        if filtered_associations:
+                            display_assoc = []
+                            for assoc in filtered_associations[:50]:
+                                display_assoc.append({
+                                    'Product A': assoc['Product A'],
+                                    'Product B': assoc['Product B'],
+                                    'Times Bought Together': assoc['Co-occurrence'],
+                                    'Support %': float(assoc['Support'].rstrip('%')),
+                                    'Confidence A→B': float(assoc['Confidence (A→B)'].rstrip('%')),
+                                    'Confidence B→A': float(assoc['Confidence (B→A)'].rstrip('%')),
+                                    'Lift': float(assoc['Lift'])
+                                })
+                            
+                            st.dataframe(display_assoc, use_container_width=True)
+                            
+                            csv = pd.DataFrame(display_assoc).to_csv(index=False)
+                            st.download_button("📥 Download CSV", csv, "associations.csv", "text/csv")
+                        else:
+                            st.info(f"No associations found with {min_support}% support. Lower the threshold.")
+                    
+                    with sub_tab2:
+                        st.subheader("Product Association Network")
+                        min_support_count = max(1, int(result['total_transactions'] * min_support / 100))
+                        filtered_associations = [a for a in result['associations'] if a['Co-occurrence'] >= min_support_count]
+                        
+                        fig_network = Visualizer.plot_product_association_network(filtered_associations, top_n=20)
+                        if fig_network:
+                            st.plotly_chart(fig_network, use_container_width=True)
+                        else:
+                            st.info("Not enough data for network visualization")
+                    
+                    with sub_tab3:
+                        st.subheader("Product Purchase Frequency")
+                        fig_freq = Visualizer.plot_product_frequency(result['product_freq'], top_n=25)
+                        if fig_freq:
+                            st.plotly_chart(fig_freq, use_container_width=True)
+                        
+                        freq_df = pd.DataFrame(result['product_freq'], columns=['Product', 'Purchase Count'])
+                        st.dataframe(freq_df, use_container_width=True)
+                    
+                    with sub_tab4:
+                        st.subheader("Association Strength Ranking")
+                        min_support_count = max(1, int(result['total_transactions'] * min_support / 100))
+                        filtered_associations = [a for a in result['associations'] if a['Co-occurrence'] >= min_support_count]
+                        
+                        fig_strength = Visualizer.plot_association_strength(filtered_associations, top_n=20)
+                        if fig_strength:
+                            st.plotly_chart(fig_strength, use_container_width=True)
+                    
+                    # Insights
+                    st.markdown("---")
+                    st.subheader("💡 Insights & Recommendations")
+                    if filtered_associations:
+                        top_pair = filtered_associations[0]
+                        insights = [
+                            f"🏆 **Top Pair**: '{top_pair['Product A']}' + '{top_pair['Product B']}' (bought together {top_pair['Co-occurrence']}x)",
+                            f"💡 **Bundle Opportunity**: Create a bundle with these products to increase sales",
+                            f"📊 **Average Co-occurrence**: {sum(a['Co-occurrence'] for a in filtered_associations) / len(filtered_associations):.1f} times",
+                        ]
+                        for insight in insights:
+                            st.info(insight)
+    
+    with tab2:
+        st.subheader("📊 POS Transaction Overview")
+        
+        # Overall metrics
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Transactions", len(df))
+        col2.metric("Date Range", f"{df['Date'].min() if 'Date' in df.columns else 'N/A'} to {df['Date'].max() if 'Date' in df.columns else 'N/A'}")
+        
+        if 'Total_Amount_JOD' in df.columns:
+            col3.metric("Total Revenue", f"JOD {df['Total_Amount_JOD'].sum():,.2f}")
+            col4.metric("Avg Transaction", f"JOD {df['Total_Amount_JOD'].mean():,.2f}")
+        
+        st.markdown("---")
+        
+        # Transaction amount distribution
+        if 'Total_Amount_JOD' in df.columns:
+            col1, col2 = st.columns(2)
             
-            # Insights
+            with col1:
+                fig_amount = px.histogram(
+                    df, 
+                    x='Total_Amount_JOD',
+                    nbins=50,
+                    title='Transaction Amount Distribution',
+                    labels={'Total_Amount_JOD': 'Amount (JOD)'}
+                )
+                st.plotly_chart(fig_amount, use_container_width=True)
+            
+            with col2:
+                fig_box = px.box(
+                    df,
+                    y='Total_Amount_JOD',
+                    title='Transaction Amount Box Plot',
+                    labels={'Total_Amount_JOD': 'Amount (JOD)'}
+                )
+                st.plotly_chart(fig_box, use_container_width=True)
+    
+    with tab3:
+        st.subheader("👥 Customer Analysis")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if 'Customer_Status' in df.columns:
+                status_data = df['Customer_Status'].value_counts()
+                fig_status = px.pie(
+                    values=status_data.values,
+                    names=status_data.index,
+                    title='Customer Status Distribution'
+                )
+                st.plotly_chart(fig_status, use_container_width=True)
+        
+        with col2:
+            if 'Payment_Method' in df.columns:
+                payment_data = df['Payment_Method'].value_counts()
+                fig_payment = px.pie(
+                    values=payment_data.values,
+                    names=payment_data.index,
+                    title='Payment Method Distribution'
+                )
+                st.plotly_chart(fig_payment, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Customer age analysis
+        if 'Customer_Age' in df.columns:
+            fig_age = px.histogram(
+                df,
+                x='Customer_Age',
+                nbins=30,
+                title='Customer Age Distribution',
+                labels={'Customer_Age': 'Age'}
+            )
+            st.plotly_chart(fig_age, use_container_width=True)
+        
+        # Customer spending by status
+        if 'Customer_Status' in df.columns and 'Total_Amount_JOD' in df.columns:
+            spending_by_status = df.groupby('Customer_Status')['Total_Amount_JOD'].agg(['mean', 'sum', 'count'])
+            st.subheader("Spending by Customer Status")
+            st.dataframe(spending_by_status, use_container_width=True)
+    
+    with tab4:
+        st.subheader("📦 Product Category Analysis")
+        
+        if 'Primary_Item_Category' in df.columns:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                category_counts = df['Primary_Item_Category'].value_counts()
+                fig_cat = px.bar(
+                    x=category_counts.values,
+                    y=category_counts.index,
+                    orientation='h',
+                    title='Transactions by Category',
+                    labels={'x': 'Count', 'y': 'Category'}
+                )
+                st.plotly_chart(fig_cat, use_container_width=True)
+            
+            with col2:
+                if 'Total_Amount_JOD' in df.columns:
+                    category_revenue = df.groupby('Primary_Item_Category')['Total_Amount_JOD'].sum().sort_values(ascending=False)
+                    fig_rev = px.bar(
+                        x=category_revenue.values,
+                        y=category_revenue.index,
+                        orientation='h',
+                        title='Revenue by Category (JOD)',
+                        labels={'x': 'Revenue', 'y': 'Category'}
+                    )
+                    st.plotly_chart(fig_rev, use_container_width=True)
+            
             st.markdown("---")
-            st.subheader("💡 Key Insights & Recommendations")
             
-            if filtered_associations:
-                top_pair = filtered_associations[0]
-                insights = [
-                    f"🏆 **Strongest Association**: {top_pair['Product A']} and {top_pair['Product B']} are bought together {top_pair['Co-occurrence']} times",
-                    f"💰 **Business Opportunity**: Consider bundling {top_pair['Product A']} with {top_pair['Product B']} to boost sales",
-                ]
-                
-                # Additional insights
-                if len(filtered_associations) > 1:
-                    avg_cooccurrence = sum(a['Co-occurrence'] for a in filtered_associations) / len(filtered_associations)
-                    insights.append(f"📊 **Average Co-occurrence**: {avg_cooccurrence:.1f} transactions")
-                
-                # Most popular product
-                most_popular = result['product_freq'][0]
-                insights.append(f"🌟 **Most Popular**: {most_popular[0]} appears in {most_popular[1]} transactions")
-                
-                for insight in insights:
-                    st.info(insight)
-            else:
-                st.warning("No strong product associations found with current settings. Consider lowering the minimum support threshold.")
+            # Category detailed stats
+            if 'Total_Amount_JOD' in df.columns:
+                st.subheader("Category Performance Metrics")
+                cat_stats = df.groupby('Primary_Item_Category').agg({
+                    'Transaction_ID': 'count',
+                    'Total_Amount_JOD': ['sum', 'mean', 'min', 'max']
+                }).round(2)
+                cat_stats.columns = ['Transactions', 'Total Revenue', 'Avg Amount', 'Min', 'Max']
+                st.dataframe(cat_stats, use_container_width=True)
+    
+    with tab5:
+        st.subheader("⏰ Time-based Analysis")
+        
+        if 'Day_of_Week' in df.columns:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                day_counts = df['Day_of_Week'].value_counts().reindex(day_order, fill_value=0)
+                fig_day = px.bar(
+                    x=day_counts.index,
+                    y=day_counts.values,
+                    title='Transactions by Day of Week',
+                    labels={'x': 'Day', 'y': 'Transaction Count'}
+                )
+                st.plotly_chart(fig_day, use_container_width=True)
+            
+            with col2:
+                if 'Total_Amount_JOD' in df.columns:
+                    day_revenue = df.groupby('Day_of_Week')['Total_Amount_JOD'].sum().reindex(day_order, fill_value=0)
+                    fig_day_rev = px.bar(
+                        x=day_revenue.index,
+                        y=day_revenue.values,
+                        title='Revenue by Day of Week',
+                        labels={'x': 'Day', 'y': 'Revenue (JOD)'}
+                    )
+                    st.plotly_chart(fig_day_rev, use_container_width=True)
 
 
 def forecasting_page():
