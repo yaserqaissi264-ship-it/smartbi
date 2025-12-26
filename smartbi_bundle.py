@@ -1153,6 +1153,9 @@ def data_upload_page():
                 numeric_keywords = ['amount', 'total', 'price', 'revenue', 'quantity', 'age', 'count', 'value', 'sales', 'year', 'month']
                 datetime_keywords = ['date', 'time', 'timestamp', 'datetime']
                 
+                converted_numeric = []
+                converted_datetime = []
+                
                 for col in df.columns:
                     col_lower = col.lower()
                     
@@ -1172,16 +1175,19 @@ def data_upload_page():
                             # Use the converted version
                             if temp.notna().sum() > 0:
                                 df[col] = temp
-                        except:
+                                converted_numeric.append(col)
+                        except Exception as e:
                             pass
                     
-                    # Step 2: Try to convert datetime keywords
+                    # Step 2: Try to convert datetime keywords (only if not already numeric)
                     elif any(keyword in col_lower for keyword in datetime_keywords):
                         try:
                             temp = pd.to_datetime(df[col], errors='coerce')
-                            if temp.notna().sum() > 0:
+                            # Check if conversion was successful (at least 50% of values converted)
+                            if temp.notna().sum() > len(df) * 0.5:
                                 df[col] = temp
-                        except:
+                                converted_datetime.append(col)
+                        except Exception as e:
                             pass
                 
                 st.session_state.current_df = df
@@ -1194,8 +1200,18 @@ def data_upload_page():
                 st.success(f"✅ File uploaded successfully! {len(df)} rows, {len(df.columns)} columns")
                 st.info(f"📊 Detected: {len(numeric_cols)} numeric, {len(categorical_cols)} categorical, {len(datetime_cols)} datetime columns")
                 
+                # Show detailed conversion info
+                if converted_numeric or converted_datetime:
+                    with st.expander("🔄 Data Type Conversions Applied"):
+                        if converted_numeric:
+                            st.write(f"✅ Numeric conversions: {', '.join(converted_numeric)}")
+                        if converted_datetime:
+                            st.write(f"📅 DateTime conversions: {', '.join(converted_datetime)}")
+                
                 if numeric_cols:
                     st.write(f"**Numeric columns:** {', '.join(numeric_cols)}")
+                if datetime_cols:
+                    st.write(f"**DateTime columns:** {', '.join(datetime_cols)}")
                 if categorical_cols:
                     st.write(f"**Categorical columns:** {', '.join(categorical_cols[:5])}{'...' if len(categorical_cols) > 5 else ''}")
                 
