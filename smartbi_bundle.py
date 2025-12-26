@@ -1145,13 +1145,71 @@ def data_upload_page():
         if uploaded_file is not None:
             try:
                 df = pd.read_csv(uploaded_file)
+                
+                # Strip whitespace from column names
+                df.columns = df.columns.str.strip()
+                
+                # Step 1: For columns with numeric keywords, aggressively convert
+                numeric_keywords = ['amount', 'total', 'price', 'revenue', 'quantity', 'age', 'count', 'value', 'sales', 'year', 'month']
+                datetime_keywords = ['date', 'time', 'timestamp', 'datetime']
+                
+                for col in df.columns:
+                    col_lower = col.lower()
+                    
+                    # IMPORTANT: Try conversion for ALL columns with numeric keywords
+                    if any(keyword in col_lower for keyword in numeric_keywords):
+                        try:
+                            # Method 1: Direct conversion (for already numeric)
+                            temp = pd.to_numeric(df[col], errors='coerce')
+                            
+                            # If that doesn't work well, try stripping currency
+                            if temp.isna().sum() > len(df) * 0.3:
+                                temp = df[col].astype(str).str.strip()
+                                temp = temp.str.replace(r'[A-Za-z\$€£¥\s]', '', regex=True)  # Remove letters and currency symbols
+                                temp = temp.str.replace(',', '')  # Remove commas
+                                temp = pd.to_numeric(temp, errors='coerce')
+                            
+                            # Use the converted version
+                            if temp.notna().sum() > 0:
+                                df[col] = temp
+                        except:
+                            pass
+                    
+                    # Step 2: Try to convert datetime keywords
+                    elif any(keyword in col_lower for keyword in datetime_keywords):
+                        try:
+                            temp = pd.to_datetime(df[col], errors='coerce')
+                            if temp.notna().sum() > 0:
+                                df[col] = temp
+                        except:
+                            pass
+                
                 st.session_state.current_df = df
                 
+                # Count numeric columns
+                numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
+                datetime_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
+                
                 st.success(f"✅ File uploaded successfully! {len(df)} rows, {len(df.columns)} columns")
+                st.info(f"📊 Detected: {len(numeric_cols)} numeric, {len(categorical_cols)} categorical, {len(datetime_cols)} datetime columns")
+                
+                if numeric_cols:
+                    st.write(f"**Numeric columns:** {', '.join(numeric_cols)}")
+                if categorical_cols:
+                    st.write(f"**Categorical columns:** {', '.join(categorical_cols[:5])}{'...' if len(categorical_cols) > 5 else ''}")
                 
                 # Preview
                 st.subheader("Data Preview")
                 st.dataframe(df.head(10))
+                
+                # Show column types
+                with st.expander("📋 Column Types"):
+                    col_types = pd.DataFrame({
+                        'Column': df.columns,
+                        'Type': df.dtypes.astype(str)
+                    })
+                    st.dataframe(col_types)
                 
                 # Save option
                 dataset_name = st.text_input("Dataset Name (optional)", 
@@ -1340,7 +1398,8 @@ def dashboard_page():
     elif chart_type == "Distribution":
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         if numeric_cols:
-            column = st.selectbox("Select Column", numeric_cols)
+            st.caption(f"📊 Available numeric columns: {len(numeric_cols)}")
+            column = st.selectbox("Select Column", numeric_cols, help="Only numeric columns are available for distribution analysis")
             fig = Visualizer.plot_distribution(df, column)
             fig.update_layout(
                 template="plotly_white",
@@ -1527,48 +1586,126 @@ def dashboard_page():
         
         if len(numeric_cols) >= 2:
             # Select subset of columns for heatmap
-            selected_cols = st.multiselect("Select columns for heatmap", numeric_cols, default=numeric_cols[:min(10, len(numeric_cols))])
+            selected_cols = st.multiselect("Select columns for heatmap", numeric_cols, default=numeric_cols)
             
             if selected_cols:
-                corr_matrix = df[selected_cols].corr()
-                fig = px.imshow(
-                    corr_matrix,
-                    text_auto=".2f",
-                    aspect="auto",
-                    color_continuous_scale="RdBu_r",
-                    title="Correlation Heatmap",
-                    labels=dict(color="Correlation")
-                )
-                fig.update_layout(height=600)
-                st.plotly_chart(fig, use_container_width=True, config=chart_config)
+                try:
+                    # Remove rows with missing values in selected columns for correlation
+                    corr_data = df[selected_cols].dropna()
+                    
+                    if len(corr_data) == 0:
+                        st.error("❌ No valid data after removing missing values")
+                    else:
+                        corr_matrix = corr_data.corr()
+                        fig = px.imshow(
+                            corr_matrix,
+                            text_auto=".2f",
+                            aspect="auto",
+                            color_continuous_scale="RdBu_r",
+                            title="Correlation Heatmap",
+                            labels=dict(color="Correlation")
+                        )
+                        fig.update_layout(height=600)
+                        st.plotly_chart(fig, use_container_width=True, config=chart_config)
+                except Exception as e:
+                    st.error(f"❌ Error creating heatmap: {str(e)}")
+                    st.info("💡 Tip: Make sure selected columns are numeric and have valid values")
         else:
-            st.info("Need at least 2 numeric columns for heatmap")
+            st.info(f"Need at least 2 numeric columns for heatmap. Found: {len(numeric_cols)} numeric columns")
     
     elif chart_type == "Sunburst (Categorical)":
         cat_cols = df.select_dtypes(include=['object']).columns.tolist()
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         
+        # Show all numeric columns but suggest which ones are best for aggregation
+        # Filter out only obvious ID columns that never make sense to aggregate
+        id_keywords = ['_id', 'id_', 'transaction_id', 'customer_id']
+        poor_agg_cols = [col for col in numeric_cols if any(kw in col.lower() for kw in id_keywords)]
+        recommended_cols = [col for col in numeric_cols if col not in poor_agg_cols]
+        
         if len(cat_cols) >= 2 and numeric_cols:
             col1, col2, col3 = st.columns(3)
-            level1 = col1.selectbox("Level 1", cat_cols)
-            level2 = col2.selectbox("Level 2", [c for c in cat_cols if c != level1])
-            value_col = col3.selectbox("Values", numeric_cols)
+            level1 = col1.selectbox("Level 1", cat_cols, help="First category level")
+            level2 = col2.selectbox("Level 2", [c for c in cat_cols if c != level1], help="Second category level")
             
-            # Create sunburst data
-            sunburst_data = df.groupby([level1, level2])[value_col].sum().reset_index()
+            # Show all numeric columns, but mark recommended ones
+            value_options = []
+            for col in numeric_cols:
+                if col in recommended_cols:
+                    value_options.append(f"✓ {col}")
+                else:
+                    value_options.append(f"⚠️ {col}")
             
-            fig = px.sunburst(
-                sunburst_data,
-                labels=[level1, level2],
-                parents=[""] + [level1] * len(sunburst_data),
-                values=value_col,
-                title=f"Sunburst: {level1} → {level2} by {value_col}",
-                template="plotly_white"
+            value_display = col3.selectbox(
+                "Values", 
+                value_options,
+                help="✓ = Recommended for aggregation | ⚠️ = Use with caution (ID columns)"
             )
-            fig.update_layout(height=600)
-            st.plotly_chart(fig, use_container_width=True, config=chart_config)
+            
+            # Extract actual column name
+            value_col = value_display.replace("✓ ", "").replace("⚠️ ", "")
+            
+            try:
+                # Create sunburst data with proper hierarchy
+                sunburst_data = df.groupby([level1, level2])[value_col].sum().reset_index()
+                
+                # Rename columns for sunburst
+                sunburst_data_clean = sunburst_data.copy()
+                sunburst_data_clean['level1'] = sunburst_data_clean[level1]
+                sunburst_data_clean['level2'] = sunburst_data_clean[level2]
+                sunburst_data_clean['combined'] = sunburst_data_clean['level1'].astype(str) + ' - ' + sunburst_data_clean['level2'].astype(str)
+                
+                # Create hierarchical data structure
+                # Root level
+                root_df = pd.DataFrame({
+                    'labels': ['Total'],
+                    'parents': [''],
+                    'values': [sunburst_data_clean[value_col].sum()]
+                })
+                
+                # Level 1 aggregation
+                level1_df = sunburst_data_clean.groupby('level1')[value_col].sum().reset_index()
+                level1_df.columns = ['labels', 'values']
+                level1_df['parents'] = 'Total'
+                
+                # Level 2 (leaf nodes)
+                level2_df = sunburst_data_clean[['combined', 'level1', value_col]].copy()
+                level2_df.columns = ['labels', 'parents', 'values']
+                
+                # Combine all levels
+                final_data = pd.concat([
+                    root_df,
+                    level1_df,
+                    level2_df
+                ], ignore_index=True)
+                
+                # Create sunburst
+                fig = px.sunburst(
+                    final_data,
+                    labels='labels',
+                    parents='parents',
+                    values='values',
+                    title=f"Sunburst: {level1} → {level2} (Aggregated by {value_col})",
+                    template="plotly_white"
+                )
+                fig.update_layout(height=600)
+                st.plotly_chart(fig, use_container_width=True, config=chart_config)
+                
+                # Show warning if using ID column
+                if value_col in poor_agg_cols:
+                    st.warning(f"⚠️ '{value_col}' appears to be an ID column. Results may not be meaningful.")
+                    
+            except Exception as e:
+                st.error(f"❌ Error creating sunburst: {str(e)}")
+                st.info("💡 **Tip:** For sunburst charts:")
+                st.write("- **Level 1 & 2:** Categorical columns (text/categories)")
+                st.write("- **Values:** Numeric column to aggregate (sum/count)")
+                st.write(f"- **Best choices for Values:** {', '.join([c for c in recommended_cols if len(c) < 20])}")
         else:
-            st.info("Need at least 2 categorical columns and 1 numeric column")
+            if len(cat_cols) < 2:
+                st.info("Need at least 2 categorical columns for sunburst chart")
+            else:
+                st.info(f"Need numeric columns for Values. Found: {len(numeric_cols)} numeric columns")
 
 
 def market_basket_page():
@@ -1941,6 +2078,15 @@ def data_analysis_page():
     
     df = st.session_state.current_df
     
+    # Validate data
+    if df.empty:
+        st.error("❌ Dataset is empty. Please upload a valid dataset.")
+        return
+    
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    if not numeric_cols:
+        st.warning("⚠️ No numeric columns found. Some analysis features may be limited.")
+    
     # Generate analysis
     profile = DataProfiler.generate_profile(df)
     data_types = DataProfiler.detect_data_types(df)
@@ -2064,7 +2210,8 @@ def data_analysis_page():
     
     if numeric_cols:
         st.subheader("Numeric Feature Distributions")
-        selected_col = st.selectbox("Select column to analyze", numeric_cols)
+        st.caption(f"📊 Available numeric columns: {len(numeric_cols)}")
+        selected_col = st.selectbox("Select column to analyze", numeric_cols, help="Only numeric columns are available for distribution analysis")
         
         col1, col2 = st.columns(2)
         
@@ -2179,6 +2326,16 @@ def feature_engineering_page():
     
     df = st.session_state.current_df.copy()
     
+    # Validate data
+    if df.empty:
+        st.error("❌ Dataset is empty. Please upload a valid dataset.")
+        return
+    
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    if not numeric_cols:
+        st.warning("⚠️ No numeric columns available for feature engineering.")
+        return
+    
     # Feature engineering options
     st.subheader("Feature Engineering Tools")
     
@@ -2189,46 +2346,58 @@ def feature_engineering_page():
         st.write("Create polynomial features (x², x³, etc.) to capture non-linear relationships.")
         
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        selected_cols = st.multiselect("Select columns for polynomial features", numeric_cols, default=numeric_cols[:2] if numeric_cols else [])
+        selected_cols = st.multiselect("Select columns for polynomial features", numeric_cols, default=numeric_cols if numeric_cols else [])
         degree = st.slider("Polynomial degree", 2, 4, 2)
         
         if st.button("🔧 Create Polynomial Features"):
-            with st.spinner("Creating polynomial features..."):
-                engineered_df = FeatureExtractor.create_polynomial_features(df, selected_cols, degree=degree)
-                st.session_state.engineered_df = engineered_df
-                st.success(f"✅ Created {len(engineered_df.columns) - len(df.columns)} new polynomial features!")
-                st.dataframe(engineered_df.head())
+            if not selected_cols:
+                st.error("❌ Please select at least one column for polynomial features.")
+            else:
+                with st.spinner("Creating polynomial features..."):
+                    engineered_df = FeatureExtractor.create_polynomial_features(df, selected_cols, degree=degree)
+                    st.session_state.engineered_df = engineered_df
+                    new_features = len(engineered_df.columns) - len(df.columns)
+                    st.success(f"✅ Created {new_features} new polynomial features!")
+                    st.dataframe(engineered_df.head())
     
     with tab2:
         st.subheader("Interaction Features")
         st.write("Create interaction features (x*y) to capture relationships between features.")
         
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        selected_cols = st.multiselect("Select columns for interactions", numeric_cols, key="interaction_cols", default=numeric_cols[:2] if numeric_cols else [])
+        selected_cols = st.multiselect("Select columns for interactions", numeric_cols, key="interaction_cols", default=numeric_cols if numeric_cols else [])
         
         if st.button("🔧 Create Interaction Features"):
-            with st.spinner("Creating interaction features..."):
-                engineered_df = FeatureExtractor.create_interaction_features(df, selected_cols)
-                st.session_state.engineered_df = engineered_df
-                new_features = len(engineered_df.columns) - len(df.columns)
-                st.success(f"✅ Created {new_features} new interaction features!")
-                st.dataframe(engineered_df.head())
+            if not selected_cols:
+                st.error("❌ Please select at least one column for interaction features.")
+            elif len(selected_cols) < 2:
+                st.error("❌ Please select at least 2 columns to create interactions.")
+            else:
+                with st.spinner("Creating interaction features..."):
+                    engineered_df = FeatureExtractor.create_interaction_features(df, selected_cols)
+                    st.session_state.engineered_df = engineered_df
+                    new_features = len(engineered_df.columns) - len(df.columns)
+                    st.success(f"✅ Created {new_features} new interaction features!")
+                    st.dataframe(engineered_df.head())
     
     with tab3:
         st.subheader("Statistical Rolling Features")
         st.write("Create rolling mean, std, and lag features for time series analysis.")
         
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        selected_cols = st.multiselect("Select columns for statistical features", numeric_cols, key="stat_cols", default=numeric_cols[:1] if numeric_cols else [])
+        selected_cols = st.multiselect("Select columns for statistical features", numeric_cols, key="stat_cols", default=numeric_cols if numeric_cols else [])
         window = st.slider("Rolling window size", 3, 30, 7)
         
         if st.button("🔧 Create Statistical Features"):
-            with st.spinner("Creating statistical features..."):
-                engineered_df = FeatureExtractor.create_statistical_features(df, selected_cols, window=window)
-                st.session_state.engineered_df = engineered_df
-                new_features = len(engineered_df.columns) - len(df.columns)
-                st.success(f"✅ Created {new_features} new statistical features!")
-                st.dataframe(engineered_df.head())
+            if not selected_cols:
+                st.error("❌ Please select at least one column for statistical features.")
+            else:
+                with st.spinner("Creating statistical features..."):
+                    engineered_df = FeatureExtractor.create_statistical_features(df, selected_cols, window=window)
+                    st.session_state.engineered_df = engineered_df
+                    new_features = len(engineered_df.columns) - len(df.columns)
+                    st.success(f"✅ Created {new_features} new statistical features!")
+                    st.dataframe(engineered_df.head())
     
     with tab4:
         st.subheader("Categorical Encoding")
@@ -2250,35 +2419,127 @@ def feature_engineering_page():
     
     with tab5:
         st.subheader("Feature Importance Analysis")
-        st.write("Analyze which features are most correlated with a target variable.")
+        st.write("Analyze correlations between variables.")
         
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        if numeric_cols:
-            target_col = st.selectbox("Select target column", numeric_cols)
+        cat_cols = df.select_dtypes(include=['object']).columns.tolist()
+        all_cols = numeric_cols + cat_cols
+        
+        if numeric_cols or cat_cols:
+            # Analysis mode selector
+            analysis_mode = st.radio("Analysis Type", ["Compare 2 Variables", "Target Variable (All Features)"], horizontal=True)
             
-            if st.button("📊 Analyze Feature Importance"):
-                importance = FeatureExtractor.feature_importance_analysis(df, target_col)
-                if importance is not None:
-                    st.success("✅ Feature importance calculated!")
+            if analysis_mode == "Compare 2 Variables":
+                st.caption("🔍 Calculate correlation between any 2 columns in your dataset")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    col1_select = st.selectbox("Select First Variable", all_cols, key="col1_imp")
+                with col2:
+                    col2_select = st.selectbox("Select Second Variable", all_cols, key="col2_imp")
+                
+                if st.button("📊 Calculate Correlation"):
+                    # Check if both columns are numeric
+                    if col1_select in numeric_cols and col2_select in numeric_cols:
+                        corr_value = df[col1_select].corr(df[col2_select])
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Correlation Coefficient", f"{corr_value:.4f}")
+                        with col2:
+                            corr_strength = "Strong" if abs(corr_value) > 0.7 else "Moderate" if abs(corr_value) > 0.4 else "Weak"
+                            st.metric("Strength", corr_strength)
+                        with col3:
+                            direction = "Positive" if corr_value > 0 else "Negative"
+                            st.metric("Direction", direction)
+                        
+                        # Visualization
+                        fig = px.scatter(
+                            df,
+                            x=col1_select,
+                            y=col2_select,
+                            title=f"Correlation between {col1_select} and {col2_select}",
+                            trendline="ols",
+                            labels={col1_select: col1_select, col2_select: col2_select}
+                        )
+                        fig.update_layout(height=500, hovermode="closest", template="plotly_white")
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Interpretation
+                        st.info(f"**Interpretation:** {col1_select} and {col2_select} have a {corr_strength.lower()} {direction.lower()} correlation (r={corr_value:.4f})")
                     
-                    # Display as dataframe
-                    importance_df = pd.DataFrame({
-                        'Feature': importance.index,
-                        'Correlation_Strength': importance.values
-                    })
-                    st.dataframe(importance_df)
+                    elif col1_select in numeric_cols and col2_select in cat_cols:
+                        # Numeric vs Categorical
+                        st.subheader(f"Analysis: {col1_select} by {col2_select}")
+                        
+                        # Create grouped statistics
+                        grouped_stats = df.groupby(col2_select)[col1_select].agg(['mean', 'median', 'std', 'count'])
+                        st.dataframe(grouped_stats)
+                        
+                        # Visualization
+                        fig = px.box(
+                            df,
+                            x=col2_select,
+                            y=col1_select,
+                            title=f"{col1_select} Distribution by {col2_select}",
+                            template="plotly_white"
+                        )
+                        fig.update_layout(height=500, hovermode="closest")
+                        st.plotly_chart(fig, use_container_width=True)
                     
-                    # Visualize
-                    fig = px.bar(
-                        importance_df,
-                        x='Correlation_Strength',
-                        y='Feature',
-                        orientation='h',
-                        title=f'Feature Importance vs {target_col}'
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
+                    elif col1_select in cat_cols and col2_select in numeric_cols:
+                        # Categorical vs Numeric
+                        st.subheader(f"Analysis: {col2_select} by {col1_select}")
+                        
+                        # Create grouped statistics
+                        grouped_stats = df.groupby(col1_select)[col2_select].agg(['mean', 'median', 'std', 'count'])
+                        st.dataframe(grouped_stats)
+                        
+                        # Visualization
+                        fig = px.box(
+                            df,
+                            x=col1_select,
+                            y=col2_select,
+                            title=f"{col2_select} Distribution by {col1_select}",
+                            template="plotly_white"
+                        )
+                        fig.update_layout(height=500, hovermode="closest")
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    else:
+                        st.warning("⚠️ Select at least one numeric column for analysis")
+            
+            else:
+                # Original target variable analysis
+                st.caption("📊 Correlations of all numeric features with a target variable")
+                if numeric_cols:
+                    target_col = st.selectbox("Select target column", numeric_cols)
+                    
+                    if st.button("📊 Analyze Feature Importance"):
+                        importance = FeatureExtractor.feature_importance_analysis(df, target_col)
+                        if importance is not None:
+                            st.success("✅ Feature importance calculated!")
+                            
+                            # Display as dataframe
+                            importance_df = pd.DataFrame({
+                                'Feature': importance.index,
+                                'Correlation_Strength': importance.values
+                            })
+                            st.dataframe(importance_df)
+                            
+                            # Visualize
+                            fig = px.bar(
+                                importance_df,
+                                x='Correlation_Strength',
+                                y='Feature',
+                                orientation='h',
+                                title=f'Feature Importance vs {target_col}'
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No numeric columns found for importance analysis.")
         else:
-            st.info("No numeric columns found for importance analysis.")
+            st.info("No numeric or categorical columns found for analysis.")
     
     # Apply engineered features
     if st.session_state.engineered_df is not None:
