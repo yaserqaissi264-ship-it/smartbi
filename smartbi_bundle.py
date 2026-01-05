@@ -1097,6 +1097,22 @@ def init_session_state():
     if 'engineered_df' not in st.session_state:
         st.session_state.engineered_df = None
     
+    # Forecast session state variables
+    if 'forecast_result' not in st.session_state:
+        st.session_state.forecast_result = None
+    
+    if 'forecast_model' not in st.session_state:
+        st.session_state.forecast_model = None
+    
+    if 'forecast_prophet_df' not in st.session_state:
+        st.session_state.forecast_prophet_df = None
+    
+    if 'forecast_periods' not in st.session_state:
+        st.session_state.forecast_periods = None
+    
+    if 'forecast_value_col' not in st.session_state:
+        st.session_state.forecast_value_col = None
+    
     if 'profile_data' not in st.session_state:
         st.session_state.profile_data = None
 
