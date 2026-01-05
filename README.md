@@ -29,10 +29,12 @@ A comprehensive, production-ready data analytics and business intelligence appli
    - Distribution and trend analysis across dimensions
    - Export-ready custom charts and reports
 
-### 5. **🎯 Predictive Time Series Forecasting**
+### 5. **🎯 Predictive Time Series Forecasting with Accuracy Metrics**
    - Prophet-based forecasting with trend and seasonality detection
+   - **NEW:** Automatic accuracy metrics (MAE, RMSE, MAPE, R²)
+   - Instant reliability assessment with color-coded indicators
    - Automatic confidence interval calculations
-   - Long-term predictions with accuracy metrics
+   - Long-term predictions with actionable guidance
    - Seasonal decomposition and anomaly detection
 
 ### 6. **🤖 AI-Powered Insights & Assistance**
