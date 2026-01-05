@@ -685,7 +685,7 @@ class TimeSeriesForecaster:
     def calculate_accuracy_metrics(actual_df, forecast):
         """Calculate accuracy metrics for the forecast"""
         try:
-            # Convert both to same datetime for merging
+            # Make copies to avoid modifying originals
             actual_copy = actual_df.copy()
             forecast_copy = forecast.copy()
             
@@ -693,10 +693,14 @@ class TimeSeriesForecaster:
             actual_copy['ds'] = pd.to_datetime(actual_copy['ds'])
             forecast_copy['ds'] = pd.to_datetime(forecast_copy['ds'])
             
-            # Get only the historical period (where we have both actual and forecast)
-            merge_df = forecast_copy[['ds', 'yhat']].merge(
-                actual_copy[['ds', 'y']], 
-                on='ds', 
+            # Normalize to date only (remove time component for matching)
+            actual_copy['date'] = actual_copy['ds'].dt.date
+            forecast_copy['date'] = forecast_copy['ds'].dt.date
+            
+            # Merge on date
+            merge_df = forecast_copy[['date', 'yhat']].merge(
+                actual_copy[['date', 'y']], 
+                on='date', 
                 how='inner'
             )
             
@@ -705,6 +709,14 @@ class TimeSeriesForecaster:
             
             actual = merge_df['y'].values
             predicted = merge_df['yhat'].values
+            
+            # Filter out NaN values
+            mask = ~(np.isnan(actual) | np.isnan(predicted))
+            actual = actual[mask]
+            predicted = predicted[mask]
+            
+            if len(actual) == 0:
+                return None
             
             # Calculate metrics
             mae = np.mean(np.abs(actual - predicted))
@@ -721,7 +733,7 @@ class TimeSeriesForecaster:
                 'RMSE': rmse,
                 'MAPE': mape,
                 'R²': r_squared,
-                'samples': len(merge_df)
+                'samples': len(actual)
             }
         except Exception as e:
             st.error(f"Error calculating metrics: {str(e)}")
@@ -2114,6 +2126,12 @@ def forecasting_page():
                     # Calculate and display accuracy metrics
                     st.subheader("📊 Forecast Accuracy Metrics")
                     metrics = TimeSeriesForecaster.calculate_accuracy_metrics(prophet_df, forecast)
+                    
+                    # Debug: Show if calculation failed
+                    if not metrics:
+                        st.info("ℹ️ Unable to calculate accuracy metrics. Checking data compatibility...")
+                        st.write(f"Actual data shape: {prophet_df.shape}")
+                        st.write(f"Forecast data shape: {forecast.shape}")
                     
                     if metrics:
                         col1, col2, col3, col4 = st.columns(4)
