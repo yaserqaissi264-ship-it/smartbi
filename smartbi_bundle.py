@@ -2117,92 +2117,94 @@ def forecasting_page():
                 )
                 
                 if model and forecast is not None:
-                    st.success("✅ Forecast generated successfully!")
+                    # Save to session state to persist across reruns
+                    st.session_state.forecast_model = model
+                    st.session_state.forecast_result = forecast
+                    st.session_state.forecast_prophet_df = prophet_df
+                    st.session_state.forecast_periods = periods
+                    st.session_state.forecast_value_col = value_col
                     
-                    # Plot
-                    fig = TimeSeriesForecaster.plot_forecast(model, forecast, prophet_df)
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Calculate and display accuracy metrics
-                    st.subheader("📊 Forecast Accuracy Metrics")
-                    st.write("🔄 Calculating accuracy metrics...")
-                    
-                    metrics = TimeSeriesForecaster.calculate_accuracy_metrics(prophet_df, forecast)
-                    
-                    st.write(f"DEBUG: Metrics result = {metrics}")
-                    
-                    # Debug: Show if calculation failed
-                    if not metrics:
-                        st.warning("⚠️ Metrics calculation returned None")
-                        st.write(f"Actual data shape: {prophet_df.shape}")
-                        st.write(f"Forecast data shape: {forecast.shape}")
-                        st.write(f"Actual columns: {prophet_df.columns.tolist()}")
-                        st.write(f"Forecast columns: {forecast.columns.tolist()}")
-                    else:
-                        st.success("✅ Metrics calculated successfully!")
-                    
-                    if metrics:
-                        col1, col2, col3, col4 = st.columns(4)
-                        
-                        with col1:
-                            st.metric("MAE (Mean Absolute Error)", f"{metrics['MAE']:.2f}")
-                            st.caption("Lower is better")
-                        
-                        with col2:
-                            st.metric("RMSE (Root Mean Square Error)", f"{metrics['RMSE']:.2f}")
-                            st.caption("Lower is better")
-                        
-                        with col3:
-                            st.metric("MAPE (%)", f"{metrics['MAPE']:.2f}%")
-                            st.caption("Lower is better")
-                        
-                        with col4:
-                            st.metric("R² (Coefficient)", f"{metrics['R²']:.4f}")
-                            st.caption("Closer to 1 is better")
-                        
-                        st.info(f"ℹ️ Metrics calculated on {metrics['samples']} historical data points")
-                        
-                        # Interpretation
-                        st.subheader("📈 Interpretation")
-                        if metrics['MAPE'] < 5:
-                            accuracy_level = "🟢 **Excellent** - Very reliable forecast"
-                        elif metrics['MAPE'] < 10:
-                            accuracy_level = "🟡 **Good** - Reliable forecast"
-                        elif metrics['MAPE'] < 20:
-                            accuracy_level = "🟠 **Fair** - Moderate accuracy"
-                        else:
-                            accuracy_level = "🔴 **Poor** - Consider more data or different approach"
-                        
-                        st.markdown(f"**Forecast Accuracy Level:** {accuracy_level}")
-                        
-                        if metrics['R²'] < 0:
-                            st.warning("⚠️ R² is negative, suggesting the forecast performs worse than a simple average. Consider adding more data or adjusting parameters.")
-                        elif metrics['R²'] < 0.3:
-                            st.warning("⚠️ Low R² (< 0.3) indicates weak model fit. More historical data might help.")
-                        elif metrics['R²'] < 0.7:
-                            st.info("✓ Moderate R² (0.3-0.7). Model captures some patterns but has room for improvement.")
-                        else:
-                            st.success("✅ Strong R² (≥ 0.7). Model captures most of the data variation.")
-                    else:
-                        st.warning("⚠️ Could not calculate accuracy metrics. Ensure you have sufficient historical data.")
-                    
-                    # Show forecast data
-                    st.subheader("Forecast Data")
-                    future_forecast = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(periods)
-                    future_forecast.columns = ['Date', 'Forecast', 'Lower Bound', 'Upper Bound']
-                    st.dataframe(future_forecast)
-                    
-                    # Download forecast
-                    csv = future_forecast.to_csv(index=False)
-                    st.download_button(
-                        label="📥 Download Forecast",
-                        data=csv,
-                        file_name=f"forecast_{value_col}.csv",
-                        mime="text/csv"
-                    )
-                
             except Exception as e:
                 st.error(f"Error generating forecast: {str(e)}")
+    
+    # Display forecast results (from session state if available)
+    if 'forecast_result' in st.session_state and st.session_state.forecast_result is not None:
+        forecast = st.session_state.forecast_result
+        model = st.session_state.forecast_model
+        prophet_df = st.session_state.forecast_prophet_df
+        periods = st.session_state.forecast_periods
+        value_col = st.session_state.forecast_value_col
+        
+        st.success("✅ Forecast generated successfully!")
+        
+        # Plot
+        fig = TimeSeriesForecaster.plot_forecast(model, forecast, prophet_df)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Calculate and display accuracy metrics
+        st.subheader("📊 Forecast Accuracy Metrics")
+        
+        metrics = TimeSeriesForecaster.calculate_accuracy_metrics(prophet_df, forecast)
+        
+        if metrics:
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("MAE (Mean Absolute Error)", f"{metrics['MAE']:.2f}")
+                st.caption("Lower is better")
+            
+            with col2:
+                st.metric("RMSE (Root Mean Square Error)", f"{metrics['RMSE']:.2f}")
+                st.caption("Lower is better")
+            
+            with col3:
+                st.metric("MAPE (%)", f"{metrics['MAPE']:.2f}%")
+                st.caption("Lower is better")
+            
+            with col4:
+                st.metric("R² (Coefficient)", f"{metrics['R²']:.4f}")
+                st.caption("Closer to 1 is better")
+            
+            st.info(f"ℹ️ Metrics calculated on {metrics['samples']} historical data points")
+            
+            # Interpretation
+            st.subheader("📈 Interpretation")
+            if metrics['MAPE'] < 5:
+                accuracy_level = "🟢 **Excellent** - Very reliable forecast"
+            elif metrics['MAPE'] < 10:
+                accuracy_level = "🟡 **Good** - Reliable forecast"
+            elif metrics['MAPE'] < 20:
+                accuracy_level = "🟠 **Fair** - Moderate accuracy"
+            else:
+                accuracy_level = "🔴 **Poor** - Consider more data or different approach"
+            
+            st.markdown(f"**Forecast Accuracy Level:** {accuracy_level}")
+            
+            if metrics['R²'] < 0:
+                st.warning("⚠️ R² is negative, suggesting the forecast performs worse than a simple average. Consider adding more data or adjusting parameters.")
+            elif metrics['R²'] < 0.3:
+                st.warning("⚠️ Low R² (< 0.3) indicates weak model fit. More historical data might help.")
+            elif metrics['R²'] < 0.7:
+                st.info("✓ Moderate R² (0.3-0.7). Model captures some patterns but has room for improvement.")
+            else:
+                st.success("✅ Strong R² (≥ 0.7). Model captures most of the data variation.")
+        else:
+            st.warning("⚠️ Could not calculate accuracy metrics. Ensure you have sufficient historical data.")
+        
+        # Show forecast data
+        st.subheader("Forecast Data")
+        future_forecast = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(periods)
+        future_forecast.columns = ['Date', 'Forecast', 'Lower Bound', 'Upper Bound']
+        st.dataframe(future_forecast)
+        
+        # Download forecast
+        csv = future_forecast.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Forecast",
+            data=csv,
+            file_name=f"forecast_{value_col}.csv",
+            mime="text/csv"
+        )
 
 
 def data_analysis_page():
