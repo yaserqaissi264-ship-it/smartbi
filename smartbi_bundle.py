@@ -684,41 +684,48 @@ class TimeSeriesForecaster:
     @staticmethod
     def calculate_accuracy_metrics(actual_df, forecast):
         """Calculate accuracy metrics for the forecast"""
-        # Get historical forecast period (where we have actual values)
-        actual_dates = set(actual_df['ds'].dt.date)
-        forecast_with_actual = forecast[forecast['ds'].dt.date.isin(actual_dates)].copy()
-        
-        if len(forecast_with_actual) == 0:
+        try:
+            # Convert both to same datetime for merging
+            actual_copy = actual_df.copy()
+            forecast_copy = forecast.copy()
+            
+            # Ensure ds is datetime
+            actual_copy['ds'] = pd.to_datetime(actual_copy['ds'])
+            forecast_copy['ds'] = pd.to_datetime(forecast_copy['ds'])
+            
+            # Get only the historical period (where we have both actual and forecast)
+            merge_df = forecast_copy[['ds', 'yhat']].merge(
+                actual_copy[['ds', 'y']], 
+                on='ds', 
+                how='inner'
+            )
+            
+            if len(merge_df) == 0:
+                return None
+            
+            actual = merge_df['y'].values
+            predicted = merge_df['yhat'].values
+            
+            # Calculate metrics
+            mae = np.mean(np.abs(actual - predicted))
+            rmse = np.sqrt(np.mean((actual - predicted) ** 2))
+            mape = np.mean(np.abs((actual - predicted) / (np.abs(actual) + 1e-10))) * 100
+            
+            # Calculate R-squared
+            ss_res = np.sum((actual - predicted) ** 2)
+            ss_tot = np.sum((actual - np.mean(actual)) ** 2)
+            r_squared = 1 - (ss_res / (ss_tot + 1e-10))
+            
+            return {
+                'MAE': mae,
+                'RMSE': rmse,
+                'MAPE': mape,
+                'R²': r_squared,
+                'samples': len(merge_df)
+            }
+        except Exception as e:
+            st.error(f"Error calculating metrics: {str(e)}")
             return None
-        
-        # Merge with actual values
-        forecast_with_actual = forecast_with_actual.merge(
-            actual_df[['ds', 'y']], on='ds', how='inner'
-        )
-        
-        if len(forecast_with_actual) == 0:
-            return None
-        
-        actual = forecast_with_actual['y'].values
-        predicted = forecast_with_actual['yhat'].values
-        
-        # Calculate metrics
-        mae = np.mean(np.abs(actual - predicted))
-        rmse = np.sqrt(np.mean((actual - predicted) ** 2))
-        mape = np.mean(np.abs((actual - predicted) / (np.abs(actual) + 1e-10))) * 100
-        
-        # Calculate R-squared
-        ss_res = np.sum((actual - predicted) ** 2)
-        ss_tot = np.sum((actual - np.mean(actual)) ** 2)
-        r_squared = 1 - (ss_res / (ss_tot + 1e-10))
-        
-        return {
-            'MAE': mae,
-            'RMSE': rmse,
-            'MAPE': mape,
-            'R²': r_squared,
-            'samples': len(forecast_with_actual)
-        }
     
     @staticmethod
     def plot_forecast(model, forecast, actual_df):
