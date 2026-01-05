@@ -2125,13 +2125,21 @@ def forecasting_page():
                     
                     # Calculate and display accuracy metrics
                     st.subheader("📊 Forecast Accuracy Metrics")
+                    st.write("🔄 Calculating accuracy metrics...")
+                    
                     metrics = TimeSeriesForecaster.calculate_accuracy_metrics(prophet_df, forecast)
+                    
+                    st.write(f"DEBUG: Metrics result = {metrics}")
                     
                     # Debug: Show if calculation failed
                     if not metrics:
-                        st.info("ℹ️ Unable to calculate accuracy metrics. Checking data compatibility...")
+                        st.warning("⚠️ Metrics calculation returned None")
                         st.write(f"Actual data shape: {prophet_df.shape}")
                         st.write(f"Forecast data shape: {forecast.shape}")
+                        st.write(f"Actual columns: {prophet_df.columns.tolist()}")
+                        st.write(f"Forecast columns: {forecast.columns.tolist()}")
+                    else:
+                        st.success("✅ Metrics calculated successfully!")
                     
                     if metrics:
                         col1, col2, col3, col4 = st.columns(4)
