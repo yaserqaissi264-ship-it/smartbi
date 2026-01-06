@@ -2151,6 +2151,8 @@ def forecasting_page():
                 st.error(f"Error generating forecast: {str(e)}")
     
     # Display forecast results (from session state if available)
+    st.write(f"🔍 DEBUG: Checking session state. Keys: {list(st.session_state.keys())[:10]}")
+    st.write(f"🔍 DEBUG: forecast_result in session_state? {'forecast_result' in st.session_state}")
     if 'forecast_result' in st.session_state and st.session_state.forecast_result is not None:
         st.write("🔍 DEBUG: Forecast results found in session state")
         forecast = st.session_state.forecast_result
