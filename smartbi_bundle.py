@@ -2118,10 +2118,13 @@ def forecasting_page():
     
     # Run forecast
     if st.button("🚀 Generate Forecast"):
+        st.write("🔍 DEBUG: Button clicked!")
         with st.spinner("Training model and generating forecast..."):
             try:
+                st.write("🔍 DEBUG: Inside try block")
                 # Prepare data
                 prophet_df = TimeSeriesForecaster.prepare_prophet_data(df, date_col, value_col)
+                st.write("🔍 DEBUG: Prophet data prepared")
                 
                 # Train and forecast
                 model, forecast = TimeSeriesForecaster.forecast_with_prophet(
@@ -2131,14 +2134,17 @@ def forecasting_page():
                     weekly_seasonality=weekly_seasonality,
                     daily_seasonality=daily_seasonality
                 )
+                st.write(f"🔍 DEBUG: Model trained. Forecast is not None: {forecast is not None}")
                 
                 if model and forecast is not None:
+                    st.write("🔍 DEBUG: Saving to session state...")
                     # Save to session state to persist across reruns
                     st.session_state.forecast_model = model
                     st.session_state.forecast_result = forecast
                     st.session_state.forecast_prophet_df = prophet_df
                     st.session_state.forecast_periods = periods
                     st.session_state.forecast_value_col = value_col
+                    st.write("🔍 DEBUG: Saved to session state!")
                     
             except Exception as e:
                 st.error(f"Error generating forecast: {str(e)}")
