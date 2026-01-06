@@ -2171,6 +2171,8 @@ def forecasting_page():
         st.subheader("📊 Forecast Accuracy Metrics")
         
         metrics = TimeSeriesForecaster.calculate_accuracy_metrics(prophet_df, forecast)
+        st.write(f"🔍 DEBUG: Metrics returned: {metrics is not None}")
+        st.write(f"🔍 DEBUG: Metrics value: {type(metrics)} - {metrics}")
         
         if metrics:
             col1, col2, col3, col4 = st.columns(4)
