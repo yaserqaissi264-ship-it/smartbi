@@ -2145,6 +2145,7 @@ def forecasting_page():
     
     # Display forecast results (from session state if available)
     if 'forecast_result' in st.session_state and st.session_state.forecast_result is not None:
+        st.write("🔍 DEBUG: Forecast results found in session state")
         forecast = st.session_state.forecast_result
         model = st.session_state.forecast_model
         prophet_df = st.session_state.forecast_prophet_df
