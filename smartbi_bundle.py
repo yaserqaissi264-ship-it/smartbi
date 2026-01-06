@@ -2080,6 +2080,7 @@ def market_basket_page():
 def forecasting_page():
     """Time series forecasting with Prophet"""
     st.title("🔮 Time Series Forecasting")
+    st.caption(f"Last updated: 2024-01-18 18:30 UTC (v3.5)")
     
     if not PROPHET_AVAILABLE:
         st.error("❌ Prophet is not installed. Please install it: pip install prophet")
