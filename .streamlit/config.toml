@@ -1,0 +1,10 @@
+[client]
+# Force cache busting
+toolbarMode = "viewer"
+
+[logger]
+level = "debug"
+
+[server]
+# Disable caching
+maxCachedMessageAge = 0
