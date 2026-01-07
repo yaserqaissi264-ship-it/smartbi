@@ -2831,12 +2831,24 @@ def ai_assistant_page():
     # Sidebar status
     with st.sidebar:
         st.subheader("⚙️ Groq Status")
+        
+        # Debug info
+        debug = st.checkbox("Show Debug Info")
+        
+        if debug:
+            st.write("**Debug Information:**")
+            st.write(f"Groq API Key Set: {bool(st.session_state.groq_api_key)}")
+            if st.session_state.groq_api_key:
+                st.write(f"Key Preview: {st.session_state.groq_api_key[:15]}...")
+            st.write(f"Assistant Available: {assistant.available}")
+            st.write(f"Groq Available: {assistant.groq_available}")
+        
         if assistant.available and assistant.groq_available:
             st.success("✅ Groq API is Active")
             st.caption("Model: Mixtral-8x7b")
         else:
             st.error("❌ Groq API Not Configured")
-            st.info("Add GROQ_API_KEY to Streamlit secrets or environment variables")
+            st.info("Checking for GROQ_API_KEY in: config_keys.py → secrets → environment")
     
     # Status indicator
     if assistant.available and assistant.groq_available:
