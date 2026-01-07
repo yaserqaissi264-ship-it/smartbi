@@ -2876,6 +2876,34 @@ def ai_assistant_page():
         with st.chat_message(role):
             st.write(content)
     
+    # Handle quick prompts first
+    if st.session_state.get('quick_prompt'):
+        prompt = st.session_state.quick_prompt
+        st.session_state.quick_prompt = None  # Clear it
+        
+        # Display user message
+        with st.chat_message("user"):
+            st.write(prompt)
+        
+        # Save user message
+        st.session_state.db.save_chat_message("user", prompt)
+        
+        # Generate context
+        context = ""
+        if st.session_state.current_df is not None:
+            df = st.session_state.current_df
+            context = f"Dataset: {len(df)} rows, {len(df.columns)} columns. Columns: {', '.join(df.columns[:10])}"
+        
+        # Get AI response
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                use_groq = "Groq" in st.session_state.get('ai_model', "")
+                response = assistant.chat(prompt, context=context, use_groq=use_groq)
+                st.write(response)
+        
+        # Save assistant message
+        st.session_state.db.save_chat_message("assistant", response)
+    
     # Chat input
     if prompt := st.chat_input("Ask me anything about your data..."):
         # Display user message
