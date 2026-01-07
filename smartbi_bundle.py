@@ -855,7 +855,7 @@ class AIAssistant:
             messages.append({"role": "user", "content": message})
             
             response = self.groq_client.chat.completions.create(
-                model="llama-3.1-70b-versatile",
+                model="llama-3.3-70b-versatile",
                 messages=messages,
                 temperature=0.7,
                 max_tokens=500
@@ -2848,7 +2848,7 @@ def ai_assistant_page():
         
         if assistant.available and assistant.groq_available:
             st.success("✅ Groq API is Active")
-            st.caption("Model: Mixtral-8x7b")
+            st.caption("Model: Llama 3.3 70B Versatile")
         else:
             st.error("❌ Groq API Not Configured")
             st.info("Checking for GROQ_API_KEY in: config_keys.py → secrets → environment")
