@@ -2841,8 +2841,10 @@ def ai_assistant_page():
             st.write(f"Groq API Key Set: {bool(st.session_state.groq_api_key)}")
             if st.session_state.groq_api_key:
                 st.write(f"Key Preview: {st.session_state.groq_api_key[:15]}...")
+            st.write(f"GROQ_AVAILABLE (module): {GROQ_AVAILABLE}")
             st.write(f"Assistant Available: {assistant.available}")
             st.write(f"Groq Available: {assistant.groq_available}")
+            st.write(f"Groq Client: {assistant.groq_client is not None}")
         
         if assistant.available and assistant.groq_available:
             st.success("✅ Groq API is Active")
