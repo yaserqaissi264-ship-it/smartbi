@@ -1144,20 +1144,25 @@ def init_session_state():
     
     if 'groq_api_key' not in st.session_state:
         # Try to get from secrets first, then environment variable
+        groq_key = None
+        
         try:
-            st.session_state.groq_api_key = st.secrets.get("GROQ_API_KEY", "")
+            groq_key = st.secrets.get("GROQ_API_KEY", None)
         except:
-            st.session_state.groq_api_key = ""
+            pass
         
         # If not in secrets, try environment variable
-        if not st.session_state.groq_api_key:
+        if not groq_key:
             import os
-            st.session_state.groq_api_key = os.getenv("GROQ_API_KEY", "")
+            groq_key = os.getenv("GROQ_API_KEY", None)
+        
+        # Store the key (may be None or empty)
+        st.session_state.groq_api_key = groq_key or ""
     
     if 'ai_assistant' not in st.session_state:
         st.session_state.ai_assistant = AIAssistant(
             openai_key=None,
-            groq_key=st.session_state.groq_api_key
+            groq_key=st.session_state.groq_api_key if st.session_state.groq_api_key else None
         )
     
     if 'engineered_df' not in st.session_state:
