@@ -1142,26 +1142,23 @@ def init_session_state():
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
     
-    if 'openai_api_key' not in st.session_state:
-        try:
-            st.session_state.openai_api_key = ""
-        except:
-            st.session_state.openai_api_key = ""
-    
     if 'groq_api_key' not in st.session_state:
+        # Try to get from secrets first, then environment variable
         try:
             st.session_state.groq_api_key = st.secrets.get("GROQ_API_KEY", "")
         except:
             st.session_state.groq_api_key = ""
+        
+        # If not in secrets, try environment variable
+        if not st.session_state.groq_api_key:
+            import os
+            st.session_state.groq_api_key = os.getenv("GROQ_API_KEY", "")
     
     if 'ai_assistant' not in st.session_state:
         st.session_state.ai_assistant = AIAssistant(
             openai_key=None,
             groq_key=st.session_state.groq_api_key
         )
-    
-    if 'ai_model' not in st.session_state:
-        st.session_state.ai_model = "🚀 Groq (Mixtral)"
     
     if 'engineered_df' not in st.session_state:
         st.session_state.engineered_df = None
@@ -2809,60 +2806,26 @@ def ai_assistant_page():
     """Conversational AI assistant powered by Groq"""
     st.title("🤖 AI Assistant - Powered by Groq")
     
-    # Sidebar configuration
-    with st.sidebar:
-        st.subheader("⚙️ Groq Configuration")
-        
-        # Display current key status
-        current_key = st.session_state.get('groq_api_key', '')
-        if current_key:
-            st.success(f"✅ Groq API Key Active")
-            st.caption(f"Key: {current_key[:10]}...")
-        else:
-            st.warning("❌ No Groq API Key")
-        
-        st.divider()
-        
-        # Groq API Key input
-        groq_key_input = st.text_input(
-            "Enter Groq API Key",
-            type="password",
-            key="groq_key_input",
-            help="Get your free API key from https://console.groq.com"
-        )
-        
-        # Button to confirm and save key
-        if st.button("✅ Save Groq Key", use_container_width=True):
-            if groq_key_input:
-                st.session_state.groq_api_key = groq_key_input
-                # Reinitialize assistant with Groq key only
-                st.session_state.ai_assistant = AIAssistant(
-                    openai_key=None,
-                    groq_key=groq_key_input
-                )
-                st.success("✅ Groq API key saved and activated!")
-                st.rerun()
-            else:
-                st.error("❌ Please enter a Groq API key")
-        
-        # Button to clear key
-        if st.button("🗑️ Clear Key", use_container_width=True):
-            st.session_state.groq_api_key = ""
-            st.session_state.ai_assistant = AIAssistant(openai_key=None, groq_key=None)
-            st.warning("Groq API key cleared")
-            st.rerun()
-    
     # Get current assistant
     assistant = st.session_state.ai_assistant
     
+    # Sidebar status
+    with st.sidebar:
+        st.subheader("⚙️ Groq Status")
+        if assistant.available and assistant.groq_available:
+            st.success("✅ Groq API is Active")
+            st.caption("Model: Mixtral-8x7b")
+        else:
+            st.error("❌ Groq API Not Configured")
+            st.info("Add GROQ_API_KEY to Streamlit secrets or environment variables")
+    
     # Status indicator
     if assistant.available and assistant.groq_available:
-        st.success("🚀 Groq AI is ready!")
+        st.success("🚀 Groq AI is ready and available!")
     else:
-        st.warning("⚠️ Groq not configured")
-        st.info("1. Go to https://console.groq.com")
-        st.info("2. Create a free account and get your API key")
-        st.info("3. Paste your key in the sidebar and click 'Save Groq Key'")
+        st.error("❌ Groq not configured")
+        st.info("Contact admin to configure Groq API key")
+        st.stop()
     
     # Chat interface
     st.subheader("Chat with SmartBI Assistant")
