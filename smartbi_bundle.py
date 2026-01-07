@@ -1148,9 +1148,14 @@ def init_session_state():
         
         # 1. Try local config file first
         try:
-            from config_keys import GROQ_API_KEY
-            groq_key = GROQ_API_KEY
-        except:
+            import sys
+            import importlib
+            if 'config_keys' in sys.modules:
+                config_keys = sys.modules['config_keys']
+            else:
+                config_keys = importlib.import_module('config_keys')
+            groq_key = getattr(config_keys, 'GROQ_API_KEY', None)
+        except Exception as e:
             pass
         
         # 2. Try Streamlit secrets
