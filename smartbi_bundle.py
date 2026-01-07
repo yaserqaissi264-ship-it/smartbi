@@ -1143,20 +1143,29 @@ def init_session_state():
         st.session_state.chat_history = []
     
     if 'groq_api_key' not in st.session_state:
-        # Try to get from secrets first, then environment variable
+        # Try multiple sources for the API key in order of preference:
         groq_key = None
         
+        # 1. Try local config file first
         try:
-            groq_key = st.secrets.get("GROQ_API_KEY", None)
+            from config_keys import GROQ_API_KEY
+            groq_key = GROQ_API_KEY
         except:
             pass
         
-        # If not in secrets, try environment variable
+        # 2. Try Streamlit secrets
+        if not groq_key:
+            try:
+                groq_key = st.secrets.get("GROQ_API_KEY", None)
+            except:
+                pass
+        
+        # 3. Try environment variable
         if not groq_key:
             import os
             groq_key = os.getenv("GROQ_API_KEY", None)
         
-        # Store the key (may be None or empty)
+        # Store the key
         st.session_state.groq_api_key = groq_key or ""
     
     if 'ai_assistant' not in st.session_state:
