@@ -41,6 +41,13 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
 
+# Groq integration
+try:
+    from groq import Groq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+
 
 # =============================================================================
 # DATABASE LAYER - SQLite Persistence
@@ -798,20 +805,68 @@ class TimeSeriesForecaster:
 # =============================================================================
 
 class AIAssistant:
-    """Conversational AI agent with OpenAI integration"""
+    """Conversational AI agent with OpenAI and Groq integration"""
     
-    def __init__(self, api_key=None):
-        self.api_key = api_key
-        self.available = OPENAI_AVAILABLE and api_key
+    def __init__(self, openai_key=None, groq_key=None):
+        self.openai_key = openai_key
+        self.groq_key = groq_key
+        self.openai_available = OPENAI_AVAILABLE and openai_key
+        self.groq_available = GROQ_AVAILABLE and groq_key
+        self.available = self.openai_available or self.groq_available
+        self.groq_client = None
         
-        if self.available:
-            openai.api_key = api_key
+        if self.openai_available:
+            openai.api_key = openai_key
+        
+        if self.groq_available:
+            self.groq_client = Groq(api_key=groq_key)
     
-    def chat(self, message, context="", model="gpt-3.5-turbo"):
+    def chat(self, message, context="", use_groq=None):
         """Send a message to the AI assistant"""
         if not self.available:
             return self._fallback_response(message)
         
+        # Determine which service to use
+        if use_groq is None:
+            use_groq = self.groq_available  # Prefer Groq if available
+        
+        if use_groq and self.groq_available:
+            return self._groq_chat(message, context)
+        elif self.openai_available:
+            return self._openai_chat(message, context)
+        else:
+            return self._fallback_response(message)
+    
+    def _groq_chat(self, message, context=""):
+        """Send message to Groq API"""
+        try:
+            system_prompt = """You are SmartBI Assistant, an expert in business intelligence, 
+            data analytics, and data science. Help users understand their data, suggest analyses, 
+            and provide insights. Be concise and practical."""
+            
+            messages = [
+                {"role": "system", "content": system_prompt}
+            ]
+            
+            if context:
+                messages.append({"role": "system", "content": f"Context: {context}"})
+            
+            messages.append({"role": "user", "content": message})
+            
+            response = self.groq_client.chat.completions.create(
+                model="mixtral-8x7b-32768",
+                messages=messages,
+                temperature=0.7,
+                max_tokens=500
+            )
+            
+            return response.choices[0].message.content
+        
+        except Exception as e:
+            return f"Error communicating with Groq: {str(e)}"
+    
+    def _openai_chat(self, message, context=""):
+        """Send message to OpenAI API"""
         try:
             system_prompt = """You are SmartBI Assistant, an expert in business intelligence, 
             data analytics, and data science. Help users understand their data, suggest analyses, 
@@ -827,7 +882,7 @@ class AIAssistant:
             messages.append({"role": "user", "content": message})
             
             response = openai.ChatCompletion.create(
-                model=model,
+                model="gpt-3.5-turbo",
                 messages=messages,
                 temperature=0.7,
                 max_tokens=500
@@ -836,7 +891,7 @@ class AIAssistant:
             return response.choices[0].message.content
         
         except Exception as e:
-            return f"Error communicating with AI: {str(e)}"
+            return f"Error communicating with OpenAI: {str(e)}"
     
     def _fallback_response(self, message):
         """Fallback responses when OpenAI is not available"""
@@ -1087,12 +1142,26 @@ def init_session_state():
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
     
-    if 'ai_assistant' not in st.session_state:
+    if 'openai_api_key' not in st.session_state:
         try:
-            api_key = st.secrets.get("OPENAI_API_KEY", None)
+            st.session_state.openai_api_key = st.secrets.get("OPENAI_API_KEY", "")
         except:
-            api_key = None
-        st.session_state.ai_assistant = AIAssistant(api_key)
+            st.session_state.openai_api_key = ""
+    
+    if 'groq_api_key' not in st.session_state:
+        try:
+            st.session_state.groq_api_key = st.secrets.get("GROQ_API_KEY", "")
+        except:
+            st.session_state.groq_api_key = ""
+    
+    if 'ai_assistant' not in st.session_state:
+        st.session_state.ai_assistant = AIAssistant(
+            openai_key=st.session_state.openai_api_key,
+            groq_key=st.session_state.groq_api_key
+        )
+    
+    if 'ai_model' not in st.session_state:
+        st.session_state.ai_model = "🚀 Groq (Mixtral)"
     
     if 'engineered_df' not in st.session_state:
         st.session_state.engineered_df = None
@@ -2734,14 +2803,70 @@ def feature_engineering_page():
 
 
 def ai_assistant_page():
-    """Conversational AI assistant"""
+    """Conversational AI assistant with Groq and OpenAI support"""
     st.title("🤖 AI Assistant")
     
     assistant = st.session_state.ai_assistant
     
+    # Sidebar configuration
+    with st.sidebar:
+        st.subheader("⚙️ AI Configuration")
+        
+        # Groq API Key
+        groq_key = st.text_input(
+            "🚀 Groq API Key",
+            type="password",
+            value=st.session_state.get('groq_api_key', ''),
+            help="Enter your Groq API key to enable fast AI responses"
+        )
+        
+        if groq_key and groq_key != st.session_state.get('groq_api_key', ''):
+            st.session_state.groq_api_key = groq_key
+            # Reinitialize assistant with new key
+            st.session_state.ai_assistant = AIAssistant(
+                openai_key=st.session_state.get('openai_api_key'),
+                groq_key=groq_key
+            )
+            assistant = st.session_state.ai_assistant
+            st.success("✅ Groq API key configured!")
+        
+        # OpenAI API Key (optional)
+        openai_key = st.text_input(
+            "🔑 OpenAI API Key (Optional)",
+            type="password",
+            value=st.session_state.get('openai_api_key', ''),
+            help="Enter your OpenAI API key for GPT-based responses"
+        )
+        
+        if openai_key and openai_key != st.session_state.get('openai_api_key', ''):
+            st.session_state.openai_api_key = openai_key
+            # Reinitialize assistant with new key
+            st.session_state.ai_assistant = AIAssistant(
+                openai_key=openai_key,
+                groq_key=st.session_state.get('groq_api_key')
+            )
+            assistant = st.session_state.ai_assistant
+            st.success("✅ OpenAI API key configured!")
+        
+        st.divider()
+        
+        # AI Model Selection
+        if assistant.available:
+            if assistant.groq_available and assistant.openai_available:
+                st.session_state.ai_model = st.radio(
+                    "Select AI Model",
+                    ["🚀 Groq (Mixtral)", "🔑 OpenAI (GPT-3.5)"]
+                )
+            elif assistant.groq_available:
+                st.info("📡 Using Groq (Mixtral-8x7b)")
+                st.session_state.ai_model = "🚀 Groq (Mixtral)"
+            else:
+                st.info("📡 Using OpenAI (GPT-3.5)")
+                st.session_state.ai_model = "🔑 OpenAI (GPT-3.5)"
+    
     if not assistant.available:
-        st.warning("⚠️ OpenAI API key not configured. Running in fallback mode with limited responses.")
-        st.info("To enable full AI features, add your OpenAI API key in .streamlit/secrets.toml")
+        st.warning("⚠️ No AI service configured. Add your Groq or OpenAI API key in the sidebar to enable AI features.")
+        st.info("Get a free Groq API key at: https://console.groq.com")
     
     # Chat interface
     st.subheader("Chat with SmartBI Assistant")
@@ -2769,7 +2894,8 @@ def ai_assistant_page():
         # Get AI response
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                response = assistant.chat(prompt, context=context)
+                use_groq = "Groq" in st.session_state.get('ai_model', "")
+                response = assistant.chat(prompt, context=context, use_groq=use_groq)
                 st.write(response)
         
         # Save assistant message
