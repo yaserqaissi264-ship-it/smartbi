@@ -810,8 +810,9 @@ class AIAssistant:
     def __init__(self, openai_key=None, groq_key=None):
         self.openai_key = openai_key
         self.groq_key = groq_key
-        self.openai_available = OPENAI_AVAILABLE and openai_key
-        self.groq_available = GROQ_AVAILABLE and groq_key
+        # Check if keys are not None and not empty strings
+        self.openai_available = OPENAI_AVAILABLE and bool(openai_key)
+        self.groq_available = GROQ_AVAILABLE and bool(groq_key)
         self.available = self.openai_available or self.groq_available
         self.groq_client = None
         
