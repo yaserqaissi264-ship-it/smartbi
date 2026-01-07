@@ -1184,6 +1184,9 @@ def init_session_state():
     
     if 'profile_data' not in st.session_state:
         st.session_state.profile_data = None
+    
+    if 'quick_prompt' not in st.session_state:
+        st.session_state.quick_prompt = None
 
 
 def home_page():
@@ -2806,9 +2809,7 @@ def ai_assistant_page():
     """Conversational AI assistant with Groq and OpenAI support"""
     st.title("🤖 AI Assistant")
     
-    assistant = st.session_state.ai_assistant
-    
-    # Sidebar configuration
+    # Sidebar configuration - MUST be before accessing assistant
     with st.sidebar:
         st.subheader("⚙️ AI Configuration")
         
@@ -2820,16 +2821,6 @@ def ai_assistant_page():
             help="Enter your Groq API key to enable fast AI responses"
         )
         
-        if groq_key and groq_key != st.session_state.get('groq_api_key', ''):
-            st.session_state.groq_api_key = groq_key
-            # Reinitialize assistant with new key
-            st.session_state.ai_assistant = AIAssistant(
-                openai_key=st.session_state.get('openai_api_key'),
-                groq_key=groq_key
-            )
-            assistant = st.session_state.ai_assistant
-            st.success("✅ Groq API key configured!")
-        
         # OpenAI API Key (optional)
         openai_key = st.text_input(
             "🔑 OpenAI API Key (Optional)",
@@ -2838,17 +2829,31 @@ def ai_assistant_page():
             help="Enter your OpenAI API key for GPT-based responses"
         )
         
-        if openai_key and openai_key != st.session_state.get('openai_api_key', ''):
+        # Update session state with current values
+        if groq_key != st.session_state.get('groq_api_key', ''):
+            st.session_state.groq_api_key = groq_key
+            st.session_state.reinit_assistant = True
+        
+        if openai_key != st.session_state.get('openai_api_key', ''):
             st.session_state.openai_api_key = openai_key
-            # Reinitialize assistant with new key
+            st.session_state.reinit_assistant = True
+        
+        # Reinitialize assistant if keys changed
+        if st.session_state.get('reinit_assistant', False):
             st.session_state.ai_assistant = AIAssistant(
-                openai_key=openai_key,
-                groq_key=st.session_state.get('groq_api_key')
+                openai_key=st.session_state.openai_api_key if st.session_state.openai_api_key else None,
+                groq_key=st.session_state.groq_api_key if st.session_state.groq_api_key else None
             )
-            assistant = st.session_state.ai_assistant
-            st.success("✅ OpenAI API key configured!")
+            st.session_state.reinit_assistant = False
+            if groq_key:
+                st.success("✅ Groq API key configured!")
+            if openai_key:
+                st.success("✅ OpenAI API key configured!")
         
         st.divider()
+        
+        # Get current assistant state
+        assistant = st.session_state.ai_assistant
         
         # AI Model Selection
         if assistant.available:
@@ -2863,6 +2868,9 @@ def ai_assistant_page():
             else:
                 st.info("📡 Using OpenAI (GPT-3.5)")
                 st.session_state.ai_model = "🔑 OpenAI (GPT-3.5)"
+    
+    # Get assistant after sidebar is processed
+    assistant = st.session_state.ai_assistant
     
     if not assistant.available:
         st.warning("⚠️ No AI service configured. Add your Groq or OpenAI API key in the sidebar to enable AI features.")
