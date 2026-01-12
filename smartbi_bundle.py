@@ -666,21 +666,87 @@ class TimeSeriesForecaster:
             'ds': pd.to_datetime(df[date_col]),
             'y': df[value_col]
         })
+        # Remove duplicates and sort
+        prophet_df = prophet_df.drop_duplicates(subset=['ds']).sort_values('ds')
+        # Fill missing values using forward fill
+        prophet_df['y'] = prophet_df['y'].fillna(method='ffill').fillna(method='bfill')
         return prophet_df
+    
+    @staticmethod
+    def diagnose_data_quality(df, date_col, value_col):
+        """Check data quality and return diagnostic info"""
+        try:
+            dates = pd.to_datetime(df[date_col])
+            values = df[value_col].dropna()
+            
+            date_range_days = (dates.max() - dates.min()).days
+            missing_pct = (df[value_col].isnull().sum() / len(df)) * 100
+            
+            # Calculate volatility (coefficient of variation)
+            mean_val = np.mean(values)
+            std_val = np.std(values)
+            cv = std_val / (abs(mean_val) + 1e-10)
+            
+            # Check for trend
+            first_half = np.mean(values[:len(values)//2])
+            second_half = np.mean(values[len(values)//2:])
+            trend_pct = abs(second_half - first_half) / (first_half + 1e-10) * 100
+            
+            return {
+                'data_points': len(df),
+                'date_range_days': date_range_days,
+                'missing_percent': missing_pct,
+                'volatility': cv,
+                'has_trend': trend_pct > 10,
+                'trend_strength': trend_pct
+            }
+        except:
+            return None
+    
+    @staticmethod
+    def remove_outliers(df, value_col, n_std=3.0):
+        """Remove extreme outliers using standard deviation method"""
+        try:
+            mean = df[value_col].mean()
+            std = df[value_col].std()
+            mask = (df[value_col] >= mean - n_std * std) & (df[value_col] <= mean + n_std * std)
+            return df[mask].copy()
+        except:
+            return df
     
     @staticmethod
     def forecast_with_prophet(df, periods=30, yearly_seasonality=True, 
                              weekly_seasonality=True, daily_seasonality=False):
-        """Generate forecast using Prophet"""
+        """Generate forecast using Prophet with improved defaults"""
         if not PROPHET_AVAILABLE:
             st.error("Prophet not available. Please install it: pip install prophet")
             return None, None
         
+        # Convert hard-coded True/False to 'auto' for better detection
+        yearly = 'auto' if yearly_seasonality else False
+        weekly = 'auto' if weekly_seasonality else False
+        
         model = Prophet(
-            yearly_seasonality=yearly_seasonality,
-            weekly_seasonality=weekly_seasonality,
-            daily_seasonality=daily_seasonality
+            yearly_seasonality=yearly,
+            weekly_seasonality=weekly,
+            daily_seasonality=daily_seasonality,
+            changepoint_prior_scale=0.05,  # Enable trend change detection
+            interval_width=0.95,  # Confidence interval
+            seasonality_prior_scale=10  # Seasonality strength
         )
+        
+        # Add monthly seasonality if we have enough data
+        if len(df) > 730:  # 2+ years
+            try:
+                model.add_seasonality(
+                    name='monthly',
+                    period=30.5,
+                    fourier_order=5,
+                    prior_scale=10
+                )
+            except:
+                pass  # Silently skip if it fails
+        
         model.fit(df)
         
         future = model.make_future_dataframe(periods=periods)
@@ -2208,17 +2274,76 @@ def forecasting_page():
     
     # Run forecast
     if st.button("🚀 Generate Forecast"):
-        st.write("🔍 DEBUG 1: Button clicked!")
-        st.write(f"🔍 DEBUG 2: Date column selected: {date_col}")
-        st.write(f"🔍 DEBUG 3: Value column selected: {value_col}")
-        st.write(f"🔍 DEBUG 4: Periods: {periods}")
-        
-        with st.spinner("Training model and generating forecast..."):
+        with st.spinner("Analyzing data quality and generating forecast..."):
             try:
-                # Prepare data
-                prophet_df = TimeSeriesForecaster.prepare_prophet_data(df, date_col, value_col)
+                # Force datetime parsing
+                df_work = df.copy()
+                df_work[date_col] = pd.to_datetime(df_work[date_col], errors='coerce')
                 
-                # Train and forecast
+                # Get unique dates (ignore time component)
+                df_work['_date_only'] = df_work[date_col].dt.date
+                unique_dates = df_work['_date_only'].nunique()
+                num_rows = len(df_work)
+                
+                # Display what we found
+                st.write(f"🔍 DEBUG: {num_rows} total rows, {unique_dates} unique dates")
+                
+                # AUTO-AGGREGATE: If more than 2 rows per date on average, it's transaction data
+                if num_rows / unique_dates > 2:
+                    st.warning(f"⚠️ Transaction data detected! Aggregating {num_rows} rows → {unique_dates} daily totals...")
+                    
+                    # Aggregate by date
+                    df_agg = df_work.groupby('_date_only', as_index=False)[value_col].sum()
+                    df_agg['_date_only'] = pd.to_datetime(df_agg['_date_only'])
+                    df_agg.rename(columns={'_date_only': date_col}, inplace=True)
+                    
+                    st.success(f"✅ Aggregated: {num_rows} → {len(df_agg)} daily records")
+                else:
+                    df_agg = df_work.drop('_date_only', axis=1)
+                    st.info(f"✓ Data already daily level: {num_rows} records")
+                
+                # Step 1: Data quality diagnosis on AGGREGATED data
+                diagnosis = TimeSeriesForecaster.diagnose_data_quality(df_agg, date_col, value_col)
+                
+                st.subheader("📊 Data Quality Analysis")
+                if diagnosis:
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Data Points", f"{diagnosis['data_points']:,}")
+                    with col2:
+                        st.metric("Time Span", f"{diagnosis['date_range_days']} days")
+                    with col3:
+                        st.metric("Missing %", f"{diagnosis['missing_percent']:.1f}%")
+                    with col4:
+                        st.metric("Volatility", f"{diagnosis['volatility']:.2f}")
+                    
+                    # Show recommendations
+                    st.write("**Recommendations:**")
+                    if diagnosis['date_range_days'] < 365:
+                        st.warning("⚠️ Less than 1 year of data. Results may be unreliable.")
+                    elif diagnosis['date_range_days'] < 730:
+                        st.info("ℹ️ Only ~1 year of data. 2+ years recommended for seasonality.")
+                    else:
+                        st.success("✓ Good data timespan (2+ years)")
+                    
+                    if diagnosis['missing_percent'] > 10:
+                        st.warning(f"⚠️ {diagnosis['missing_percent']:.1f}% missing values. Will be filled.")
+                    
+                    if diagnosis['volatility'] > 1:
+                        st.warning("⚠️ High volatility detected. Removing extreme outliers...")
+                
+                # Step 2: Prepare data with cleaning
+                prophet_df = TimeSeriesForecaster.prepare_prophet_data(df_agg, date_col, value_col)
+                original_size = len(prophet_df)
+                
+                # Remove extreme outliers if very volatile
+                if diagnosis and diagnosis['volatility'] > 1.5:
+                    prophet_df = TimeSeriesForecaster.remove_outliers(prophet_df, 'y', n_std=3.0)
+                    if len(prophet_df) < original_size:
+                        removed = original_size - len(prophet_df)
+                        st.info(f"Removed {removed} extreme outliers ({removed/original_size*100:.1f}%)")
+                
+                # Step 3: Train and forecast
                 model, forecast = TimeSeriesForecaster.forecast_with_prophet(
                     prophet_df,
                     periods=periods,
@@ -2228,30 +2353,24 @@ def forecasting_page():
                 )
                 
                 if model and forecast is not None:
-                    st.write("🔍 DEBUG 5: About to save to session state...")
                     # Save to session state to persist across reruns
                     st.session_state.forecast_model = model
                     st.session_state.forecast_result = forecast
                     st.session_state.forecast_prophet_df = prophet_df
                     st.session_state.forecast_periods = periods
                     st.session_state.forecast_value_col = value_col
-                    st.write("🔍 DEBUG 6: Saved to session state!")
+                    st.success("✅ Forecast generated successfully!")
                     
             except Exception as e:
                 st.error(f"Error generating forecast: {str(e)}")
     
     # Display forecast results (from session state if available)
-    st.write(f"🔍 DEBUG: Checking session state. Keys: {list(st.session_state.keys())[:10]}")
-    st.write(f"🔍 DEBUG: forecast_result in session_state? {'forecast_result' in st.session_state}")
     if 'forecast_result' in st.session_state and st.session_state.forecast_result is not None:
-        st.write("🔍 DEBUG: Forecast results found in session state")
         forecast = st.session_state.forecast_result
         model = st.session_state.forecast_model
         prophet_df = st.session_state.forecast_prophet_df
         periods = st.session_state.forecast_periods
         value_col = st.session_state.forecast_value_col
-        
-        st.success("✅ Forecast generated successfully!")
         
         # Plot
         fig = TimeSeriesForecaster.plot_forecast(model, forecast, prophet_df)
@@ -2261,8 +2380,6 @@ def forecasting_page():
         st.subheader("📊 Forecast Accuracy Metrics")
         
         metrics = TimeSeriesForecaster.calculate_accuracy_metrics(prophet_df, forecast)
-        st.write(f"🔍 DEBUG: Metrics returned: {metrics is not None}")
-        st.write(f"🔍 DEBUG: Metrics value: {type(metrics)} - {metrics}")
         
         if metrics:
             col1, col2, col3, col4 = st.columns(4)
