@@ -641,6 +641,34 @@ class FeatureExtractor:
         return df_features
     
     @staticmethod
+    def create_date_features(df, date_column):
+        """Extract temporal features from datetime column"""
+        df_features = df.copy()
+        
+        try:
+            # Convert to datetime if not already
+            df_features[date_column] = pd.to_datetime(df_features[date_column])
+            
+            # Extract basic date features
+            df_features[f'{date_column}_year'] = df_features[date_column].dt.year
+            df_features[f'{date_column}_month'] = df_features[date_column].dt.month
+            df_features[f'{date_column}_day'] = df_features[date_column].dt.day
+            df_features[f'{date_column}_hour'] = df_features[date_column].dt.hour
+            
+            # Extract derived features
+            df_features[f'{date_column}_dayofweek'] = df_features[date_column].dt.dayofweek
+            df_features[f'{date_column}_quarter'] = df_features[date_column].dt.quarter
+            df_features[f'{date_column}_dayofyear'] = df_features[date_column].dt.dayofyear
+            df_features[f'{date_column}_week'] = df_features[date_column].dt.isocalendar().week
+            df_features[f'{date_column}_is_weekend'] = (df_features[date_column].dt.dayofweek >= 5).astype(int)
+            df_features[f'{date_column}_days_since_epoch'] = (df_features[date_column] - pd.Timestamp("1970-01-01")).dt.days
+            
+        except Exception as e:
+            return None
+        
+        return df_features
+    
+    @staticmethod
     def feature_importance_analysis(df, target_col):
         """Analyze feature importance using correlation"""
         numeric_df = df.select_dtypes(include=[np.number])
@@ -2713,7 +2741,7 @@ def feature_engineering_page():
     # Feature engineering options
     st.subheader("Feature Engineering Tools")
     
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Polynomial", "Interactions", "Statistical", "Categorical", "Importance"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Polynomial", "Interactions", "Statistical", "Categorical", "Date Features", "Importance"])
     
     with tab1:
         st.subheader("Polynomial Features")
@@ -2792,6 +2820,45 @@ def feature_engineering_page():
             st.info("No categorical columns found in the dataset.")
     
     with tab5:
+        st.subheader("Date/Time Features")
+        st.write("Extract temporal features (Year, Month, Day, Hour, etc.) from datetime columns.")
+        
+        # Detect datetime columns
+        datetime_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
+        
+        # Also try to parse object columns that might be dates
+        object_cols = df.select_dtypes(include=['object']).columns.tolist()
+        for col in object_cols:
+            try:
+                pd.to_datetime(df[col], infer_datetime_format=True)
+                if col not in datetime_cols:
+                    datetime_cols.append(col)
+            except:
+                pass
+        
+        if datetime_cols:
+            selected_date_col = st.selectbox("Select datetime column", datetime_cols)
+            
+            if st.button("🔧 Extract Date Features"):
+                with st.spinner("Extracting date features..."):
+                    engineered_df = FeatureExtractor.create_date_features(df, selected_date_col)
+                    if engineered_df is not None:
+                        st.session_state.engineered_df = engineered_df
+                        new_features = len(engineered_df.columns) - len(df.columns)
+                        st.success(f"✅ Created {new_features} new date features!")
+                        
+                        # Show extracted features
+                        date_features = [col for col in engineered_df.columns if selected_date_col in col and col != selected_date_col]
+                        st.info(f"**Extracted features:** {', '.join(date_features)}")
+                        
+                        st.subheader("Preview of engineered data")
+                        st.dataframe(engineered_df[[selected_date_col] + date_features].head(10))
+                    else:
+                        st.error("❌ Error extracting date features. Please ensure the column is a valid datetime.")
+        else:
+            st.info("No datetime columns found in the dataset. Please ensure date columns are in datetime format.")
+    
+    with tab6:
         st.subheader("Feature Importance Analysis")
         st.write("Analyze correlations between variables.")
         
